@@ -20,16 +20,7 @@ SCOPE = [
 # ==============================================================================
 @st.cache_resource
 def get_client():
-    """
-    Conecta ao Google Sheets usando EXCLUSIVAMENTE os Segredos do Streamlit.
-    Não há fallback para variáveis hardcoded por segurança.
-    """
-    # Verifica se as credenciais existem no secrets.toml (Local) ou Secrets (Cloud)
-    if "CREDENCIAIS_JSON" not in st.secrets:
-        st.error("🚨 ERRO CRÍTICO: Credenciais não encontradas nos Secrets.")
-        st.stop()
-        return None
-
+    
     try:
         # Carrega as credenciais direto do dicionário seguro
         creds_dict = dict(st.secrets["CREDENCIAIS_JSON"])
