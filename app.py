@@ -1,7 +1,119 @@
 import streamlit as st
+import pandas as pd
+import requests
 import time
 import os
 from services.auth_service import autenticar_usuario
+from io import StringIO
+
+@st.cache_data(ttl=600, show_spinner="Baixando dados do Google Sheets...")
+def get_google_sheet_data(sheet_url):
+    """
+    Conecta ao Google Sheets fingindo ser um navegador, corrige encoding e retorna um DataFrame.
+    """
+    
+    # Headers de "Spoofing" para parecer um browser real
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/csv,text/html,application/xhtml+xml,application/xml",
+        "Accept-Language": "en-US,en;q=0.9,pt-BR;q=0.8,pt;q=0.7"
+    }
+
+    try:
+        # 1. Requisição
+        response = requests.get(sheet_url, headers=headers, timeout=10)
+        response.raise_for_status() # Para tudo se der erro 400/500
+        
+        # 2. Correção de Encoding (O Pulo do Gato para o 'Logística')
+        response.encoding = 'utf-8' 
+        
+        # 3. Verificação de Bloqueio (Safety Check)
+        if "<!DOCTYPE html>" in response.text:
+            st.error("🚨 O Google detectou o bot e retornou HTML em vez de CSV. Verifique os Headers.")
+            return pd.DataFrame() # Retorna vazio para não quebrar o app
+            
+        # 4. Transformação em DataFrame
+        df = pd.read_csv(StringIO(response.text))
+        return df
+
+    except requests.exceptions.RequestException as e:
+        st.error(f"Erro de Conexão: {e}")
+        return pd.DataFrame()
+    except Exception as e:
+        st.error(f"Erro ao processar dados: {e}")
+        return pd.DataFrame()
+
+# --- FIM DA FUNÇÃO ---
+
+# Como você chama isso no seu app principal:
+def check_password():
+    """Retorna True se o login for bem sucedido"""
+
+    def password_entered():
+        """Callback quando o botão é clicado"""
+        # 1. Pega o que o usuário digitou
+        if "username" in st.session_state and "password" in st.session_state:
+            user_input = st.session_state["username"]
+            pass_input = st.session_state["password"]
+        else:
+            return # Se não tiver nada digitado, não faz nada
+
+        # 2. Baixa a tabela de usuários usando a conexão via requests (RÁPIDA)
+        try:
+            # Pega o ID da planilha dos secrets
+            id_planilha = st.secrets["ID_PLANILHA"]
+            gid_usuarios = st.secrets["GID_PLANILHA"] # Ou o GID específico da aba de usuários se for diferente
+
+            # Monta a URL
+            url_usuarios = f"https://docs.google.com/spreadsheets/d/{id_planilha}/export?format=csv&gid={gid_usuarios}"
+            
+            # Busca os dados (vai usar o cache se já tiver baixado)
+            df_users = get_google_sheet_data(url_usuarios)
+            
+            if df_users.empty:
+                st.error("Erro: Não foi possível baixar a lista de usuários.")
+                return
+
+            # 3. Verifica se o usuário existe na tabela
+            # Garante que a coluna de USERNAME seja string para comparação
+            df_users['USERNAME'] = df_users['USERNAME'].astype(str)
+            
+            # Filtra onde a coluna USERNAME é igual ao que foi digitado
+            user_match = df_users[df_users['USERNAME'] == user_input]
+            
+            if not user_match.empty:
+                # Pega a senha correta (que está na planilha)
+                real_password = str(user_match.iloc[0]['PASSWORD'])
+                
+                # Compara a senha digitada com a senha da planilha
+                if pass_input == real_password:
+                    st.session_state["password_correct"] = True
+                    # Limpa as credenciais da memória por segurança
+                    del st.session_state["password"]
+                    del st.session_state["username"]
+                else:
+                    st.session_state["password_correct"] = False
+            else:
+                st.session_state["password_correct"] = False
+                
+        except Exception as e:
+            st.error(f"Erro no processo de login: {e}")
+
+    # --- Interface do Login ---
+    if st.session_state.get("password_correct", False):
+        return True
+
+    # Se não estiver logado, mostra os campos de input
+    st.markdown("### Acesso Restrito")
+    
+    st.text_input("Usuário", key="username")
+    st.text_input("Senha", type="password", key="password")
+    st.button("ENTRAR", on_click=password_entered)
+
+    if "password_correct" in st.session_state and not st.session_state["password_correct"]:
+        st.error("😕 Usuário não encontrado ou senha incorreta.")
+        
+    return False
 
 __version__ = "1.0.0"
 

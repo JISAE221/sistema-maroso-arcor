@@ -3,6 +3,7 @@ import hashlib
 import streamlit as st
 from services.conexao_sheets import get_worksheet
 
+
 def make_hash(password):
     """Cria um hash SHA-256 da senha."""
     return hashlib.sha256(str.encode(password)).hexdigest()
