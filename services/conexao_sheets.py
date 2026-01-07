@@ -1,7 +1,8 @@
 import streamlit as st
 import pandas as pd
 import requests
-import gspread 
+import gspread
+import json
 from google.oauth2.service_account import Credentials
 import uuid
 from datetime import datetime, date
@@ -96,25 +97,29 @@ def carregar_mensagens(id_processo):
 # --- OTIMIZAÇÃO SÊNIOR: Cache na Autenticação ---
 @st.cache_resource
 def get_gspread_client():
-    """Autentica no Google UMA VEZ e mantem na memória RAM."""
-    if "CREDENCIAIS_JSON" not in st.secrets:
-        st.error("⚠️ Configuração de Escrita Faltando: CREDENCIAIS_JSON nos secrets.")
+    """
+    Autentica usando o JSON Bruto para evitar erros de formatação de string/TOML.
+    """
+    # Verifica a nova variável
+    if "GCP_JSON_BRUTO" not in st.secrets:
+        st.error("⚠️ Configuração Faltando: 'GCP_JSON_BRUTO' não encontrado nos secrets.")
         return None
     
     try:
-        # 1. Carrega o dicionário dos secrets
-        creds_dict = dict(st.secrets["CREDENCIAIS_JSON"])
+        # 1. Carrega o JSON bruto string e converte para dicionário Python
+        # O json.loads lida automaticamente com escapes, \n e formatação.
+        json_str = st.secrets["GCP_JSON_BRUTO"]
+        creds_dict = json.loads(json_str)
         
-        # --- A CURA MILAGROSA PARA O ERRO DE JWT ---
-        # Se a chave vier com \n literais (texto), nós transformamos em quebra de linha real.
-        if "private_key" in creds_dict:
-            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-        # -------------------------------------------
-
+        # 2. Cria as credenciais
         creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
         return gspread.authorize(creds)
+
+    except json.JSONDecodeError as e:
+        st.error(f"Erro ao ler o JSON dos secrets. Verifique se copiou o arquivo .json inteiro corretamente. Detalhe: {e}")
+        return None
     except Exception as e:
-        st.error(f"Erro Fatal de Auth: {e}")
+        st.error(f"Erro Fatal de Auth (Gspread): {e}")
         return None
 
 def get_worksheet_write(nome_aba):
