@@ -13,6 +13,7 @@ from io import StringIO
 
 # Mapeamento de Abas para GIDs (LEITURA)
 TAB_IDS = {
+    "USUARIOS": "23360391",
     "REGISTRO_ITENS": "655653628",      
     "REGISTRO_MENSAGENS": "140953297",  
     "REGISTRO_DEVOLUCOES": "673368922"  

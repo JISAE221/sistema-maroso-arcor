@@ -1,47 +1,45 @@
-import pandas as pd
-import hashlib
+# services/auth_service.py
 import streamlit as st
-from services.conexao_sheets import get_worksheet
+import pandas as pd
+# Importamos a função de leitura rápida, não a antiga get_worksheet
+from services.conexao_sheets import carregar_dados
 
-
-def make_hash(password):
-    """Cria um hash SHA-256 da senha."""
-    return hashlib.sha256(str.encode(password)).hexdigest()
-
-def check_password(password, hashed_password):
-    """Verifica se a senha digitada bate com o hash salvo."""
-    return make_hash(password) == hashed_password
-
-def autenticar_usuario(username, password_input):
+def autenticar_usuario(username, password):
     """
-    Busca o usuário na planilha e verifica a senha.
-    Retorna: (Sucesso: bool, Nome: str, Cargo: str)
+    Verifica se o usuário e senha existem na aba USUARIOS.
+    Retorna True se sucesso, False se falha.
     """
     try:
-        # Busca a aba USUARIOS
-        ws = get_worksheet("USUARIOS")
+        # 1. Busca a tabela de usuários (RÁPIDO, via CSV)
+        df_users = carregar_dados("USUARIOS")
         
-        # Pega todos os registros (Cacheamos isso para não ler a cada clique)
-        dados = ws.get_all_records()
-        df_users = pd.DataFrame(dados)
-        
-        # Filtra pelo username (transforma em string para evitar erro de número)
-        user_row = df_users[df_users['USERNAME'].astype(str) == username]
-        
-        if user_row.empty:
-            return False, None, None
-        
-        # Pega a senha salva (hash)
-        stored_hash = str(user_row.iloc[0]['PASSWORD'])
-        nome = user_row.iloc[0]['NOME']
-        cargo = user_row.iloc[0]['CARGO']
-        
-        # Verifica a senha
-        if check_password(password_input, stored_hash):
-            return True, nome, cargo
-        else:
-            return False, None, None
+        if df_users.empty:
+            st.error("Erro: Base de usuários vazia ou inacessível.")
+            return False
+
+        # 2. Garante que as colunas sejam strings para evitar erro de comparação
+        # Ajuste 'USERNAME' e 'PASSWORD' se na sua planilha os nomes forem diferentes (ex: 'Usuario', 'Senha')
+        if 'USERNAME' not in df_users.columns or 'PASSWORD' not in df_users.columns:
+            st.error("Erro: Colunas USERNAME/PASSWORD não encontradas na planilha.")
+            return False
             
+        df_users['USERNAME'] = df_users['USERNAME'].astype(str)
+        df_users['PASSWORD'] = df_users['PASSWORD'].astype(str)
+
+        # 3. Filtra o usuário
+        user_match = df_users[df_users['USERNAME'] == str(username)]
+        
+        if not user_match.empty:
+            # Pega a senha real da planilha
+            real_password = user_match.iloc[0]['PASSWORD']
+            
+            # Compara (Aqui estamos comparando texto plano conforme seu csv anterior)
+            # Se no futuro usar hash, mude a lógica aqui
+            if str(password) == real_password:
+                return True
+                
+        return False
+
     except Exception as e:
-        st.error(f"Erro na autenticação: {e}")
-        return False, None, None
+        st.error(f"Erro no serviço de autenticação: {e}")
+        return False
