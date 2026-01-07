@@ -304,7 +304,7 @@ if dados:
         if "input_oc" not in st.session_state: st.session_state["input_oc"] = st.session_state.get("cache_oc", "")
         if "input_dt_ini" not in st.session_state: st.session_state["input_dt_ini"] = st.session_state.get("cache_dt_ini", "")
         if "input_dt_fim" not in st.session_state: st.session_state["input_dt_fim"] = st.session_state.get("cache_dt_fim", "")
-        if "input_tipo_carga" not in st.session_state: st.session_state["input_tipo_carga"] = st.session_state.get("cache_tipo_carga", "DIRETA")
+        if "input_tipo_carga" not in st.session_state: st.session_state["input_tipo_carga"] = "DIRETA"
         if "input_local_atual" not in st.session_state: st.session_state["input_local_atual"] = st.session_state.get("cache_local_atual", "")
         if "input_local_destino" not in st.session_state: st.session_state["input_local_destino"] = st.session_state.get("cache_local_destino", "")
         

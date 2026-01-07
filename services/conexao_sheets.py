@@ -102,7 +102,15 @@ def get_gspread_client():
         return None
     
     try:
+        # 1. Carrega o dicionário dos secrets
         creds_dict = dict(st.secrets["CREDENCIAIS_JSON"])
+        
+        # --- A CURA MILAGROSA PARA O ERRO DE JWT ---
+        # Se a chave vier com \n literais (texto), nós transformamos em quebra de linha real.
+        if "private_key" in creds_dict:
+            creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+        # -------------------------------------------
+
         creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
         return gspread.authorize(creds)
     except Exception as e:
