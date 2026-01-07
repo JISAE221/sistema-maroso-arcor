@@ -11,8 +11,9 @@ def verificar_hash(senha_digitada, hash_armazenado):
         # 1. Converte a senha digitada para bytes e gera o hash SHA-256
         senha_hash = hashlib.sha256(str(senha_digitada).encode('utf-8')).hexdigest()
         
-        # 2. Compara (strip remove espaços em branco que podem ter vindo do CSV)
-        return senha_hash == str(hash_armazenado).strip()
+        # 2. Compara (strip remove espaços em branco/quebras de linha indesejados)
+        # Convertemos ambos para string e minúsculas para garantir match exato
+        return senha_hash.strip().lower() == str(hash_armazenado).strip().lower()
     except Exception as e:
         print(f"Erro no hash: {e}")
         return False
@@ -26,6 +27,7 @@ def autenticar_usuario(username, password):
         df_users = carregar_dados("USUARIOS")
         
         if df_users.empty:
+            st.error("Erro: Tabela de usuários não encontrada ou vazia.")
             return False, None, None
 
         # 2. Sanitização para evitar erros de tipo
@@ -36,33 +38,34 @@ def autenticar_usuario(username, password):
         user_match = df_users[df_users['USERNAME'] == str(username)]
         
         if not user_match.empty:
-            real_password = str(user_match.iloc[0]['PASSWORD']).strip()
+            # Pega o hash que veio do Google Sheets
+            hash_banco = str(user_match.iloc[0]['PASSWORD']).strip()
             
-            # Gera o hash do que foi digitado
-            senha_digitada_hash = hashlib.sha256(str(password).encode('utf-8')).hexdigest()
+            # --- DEBUG VISUAL (Apague isso antes de entregar para o cliente) ---
+            # Gera o hash localmente só para você ver na tela
+            hash_calculado_agora = hashlib.sha256(str(password).encode('utf-8')).hexdigest()
+            
+            st.write("--- DEBUG INFO ---")
+            st.write(f"Usuário encontrado: {username}")
+            st.code(f"Hash no Banco:   {hash_banco}")
+            st.code(f"Hash Digitado:   {hash_calculado_agora}")
+            st.write("------------------")
+            # ------------------------------------------------------------------
 
-            # --- DEBUG TEMPORÁRIO (O X9) ---
-            st.write(f"Hash na Planilha: |{real_password}|")
-            st.write(f"Hash Digitado...: |{senha_digitada_hash}|")
-            # -------------------------------
-
-            if senha_digitada_hash == real_password:
-
-                hash_banco = user_match.iloc[0]['PASSWORD']
+            # Validação Real
+            if verificar_hash(password, hash_banco):
+                # SUCESSO!
+                nome = user_match.iloc[0].get('NOME', username)
+                cargo = user_match.iloc[0].get('CARGO', 'Colaborador')
+                return True, nome, cargo
+            else:
+                st.warning("Senha incorreta (os hashes não batem).")
                 
-                # --- AQUI ESTAVA O PONTO CEGO ---
-                # Antes: if str(password) == hash_banco: (Comparava texto com hash)
-                # Agora: Usamos a função de verificação
-                if verificar_hash(password, hash_banco):
-                    # SUCESSO!
-                    nome = user_match.iloc[0].get('NOME', username)
-                    cargo = user_match.iloc[0].get('CARGO', 'Colaborador')
-                    return True, nome, cargo
-                else:
-                    print(f"Falha de senha para {username}") # Log interno para debug
-                    
-            return False, None, None
+        else:
+            st.warning(f"Usuário '{username}' não encontrado na tabela.")
+
+        return False, None, None
 
     except Exception as e:
-        st.error(f"Erro Auth: {e}")
+        st.error(f"Erro Crítico no Auth: {e}")
         return False, None, None
