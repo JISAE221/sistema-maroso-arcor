@@ -1,131 +1,152 @@
 import streamlit as st
 import pandas as pd
-import gspread
+import requests
+import gspread 
 from google.oauth2.service_account import Credentials
 import uuid
 from datetime import datetime, date
+from io import StringIO
 
 # ==============================================================================
-# CONFIGURAÇÕES DE SEGURANÇA
+# CONFIGURAÇÕES GERAIS
 # ==============================================================================
 
-# Escopos necessários para acessar o Google Drive e Sheets
+# Mapeamento de Abas para GIDs (LEITURA)
+TAB_IDS = {
+    "REGISTRO_ITENS": "655653628",      
+    "REGISTRO_MENSAGENS": "140953297",  
+    "REGISTRO_DEVOLUCOES": "673368922"  
+}
+
+# Escopos (ESCRITA)
 SCOPE = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive"
 ]
 
 # ==============================================================================
-# CONEXÃO OTIMIZADA (VIA SECRETS)
+# 1. LEITURA RÁPIDA (CQRS - Query) - Via Requests
 # ==============================================================================
-@st.cache_resource
-def get_client():
-    
-    try:
-        # Carrega as credenciais direto do dicionário seguro
-        creds_dict = dict(st.secrets["CREDENCIAIS_JSON"])
-        creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
-        return gspread.authorize(creds)
-    except Exception as e:
-        st.error(f"🚨 Erro de Autenticação: {e}")
-        st.stop()
-        return None
-
-def get_worksheet(nome_aba):
-    """
-    Abre uma aba específica usando o ID da planilha armazenado nos Secrets.
-    """
-    client = get_client()
-    if not client: return None
-
-    # Busca o ID da Planilha nos Secrets
-    spreadsheet_id = st.secrets.get("ID_PLANILHA")
-    
-    if not spreadsheet_id:
-        st.error("🚨 Configuração Faltando: 'ID_PLANILHA' não encontrado nos Secrets.")
-        st.stop()
-        return None
-
-    try:
-        # Abre pelo ID (Mais seguro e rápido que URL)
-        sh = client.open_by_key(spreadsheet_id)
-        return sh.worksheet(nome_aba)
-    except Exception as e:
-        # Erro comum: A aba não existe ou o ID está errado
-        print(f"Erro ao abrir aba '{nome_aba}': {e}")
-        return None
-
-# ==============================================================================
-# LEITURA DE DADOS
-# ==============================================================================
-@st.cache_data(ttl=30, show_spinner=False)
+@st.cache_data(ttl=60, show_spinner=False) # Aumentei TTL para 60s (padrão de mercado)
 def carregar_dados(nome_da_aba):
+    """Lê dados via CSV export (Rápido e Leve)"""
     try:
-        ws = get_worksheet(nome_da_aba)
-        if not ws: return pd.DataFrame()
+        if "ID_PLANILHA" not in st.secrets:
+            return pd.DataFrame()
+            
+        sheet_id = st.secrets["ID_PLANILHA"]
+        gid = TAB_IDS.get(nome_da_aba, "0")
         
-        data = ws.get_all_records()
-        if not data: return pd.DataFrame()
+        url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
         
-        return pd.DataFrame(data)
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        response.encoding = 'utf-8'
+        
+        # Converte para DF e força tudo como string para evitar erros de tipagem
+        return pd.read_csv(StringIO(response.text)).fillna("")
+        
     except Exception as e:
-        print(f"Erro leitura ({nome_da_aba}): {e}")
+        print(f"Erro leitura rápida ({nome_da_aba}): {e}")
         return pd.DataFrame()
 
 def carregar_itens_por_processo(id_processo):
-    try:
-        df = carregar_dados("REGISTRO_ITENS")
-        if not df.empty and "ID_PROCESSO" in df.columns:
-            return df[df["ID_PROCESSO"] == id_processo]
-    except: pass
+    df = carregar_dados("REGISTRO_ITENS")
+    if not df.empty and "ID_PROCESSO" in df.columns:
+        df["ID_PROCESSO"] = df["ID_PROCESSO"].astype(str)
+        return df[df["ID_PROCESSO"] == str(id_processo)]
     return pd.DataFrame()
 
 def carregar_mensagens(id_processo):
     df = carregar_dados("REGISTRO_MENSAGENS")
     if not df.empty and "ID_PROCESSO" in df.columns:
-        return df[df["ID_PROCESSO"] == id_processo].sort_values("DATA_HORA")
+        df["ID_PROCESSO"] = df["ID_PROCESSO"].astype(str)
+        return df[df["ID_PROCESSO"] == str(id_processo)].sort_values("DATA_HORA")
     return pd.DataFrame()
 
 # ==============================================================================
-# ESCRITA E ATUALIZAÇÃO
+# 2. ESCRITA SEGURA (CQRS - Command) - Via API Gspread
+# ==============================================================================
+
+# --- OTIMIZAÇÃO SÊNIOR: Cache na Autenticação ---
+@st.cache_resource
+def get_gspread_client():
+    """Autentica no Google UMA VEZ e mantem na memória RAM."""
+    if "CREDENCIAIS_JSON" not in st.secrets:
+        st.error("⚠️ Configuração de Escrita Faltando: CREDENCIAIS_JSON nos secrets.")
+        return None
+    
+    try:
+        creds_dict = dict(st.secrets["CREDENCIAIS_JSON"])
+        creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
+        return gspread.authorize(creds)
+    except Exception as e:
+        st.error(f"Erro Fatal de Auth: {e}")
+        return None
+
+def get_worksheet_write(nome_aba):
+    """Pega a aba usando o cliente cacheado."""
+    client = get_gspread_client()
+    if not client: return None
+    
+    try:
+        # Abre planilha pelo ID
+        sh = client.open_by_key(st.secrets["ID_PLANILHA"])
+        return sh.worksheet(nome_aba)
+    except Exception as e:
+        st.error(f"Erro ao abrir aba '{nome_aba}': {e}")
+        return None
+
+# ==============================================================================
+# FUNÇÕES DE COMANDO (SALVAR/ATUALIZAR)
 # ==============================================================================
 
 def salvar_mensagem(id_processo, usuario, texto, link_anexo=""):
     try:
-        ws = get_worksheet("REGISTRO_MENSAGENS")
+        ws = get_worksheet_write("REGISTRO_MENSAGENS")
         if not ws: return False
         
         nova_msg = [
             str(uuid.uuid4())[:8],
-            id_processo,
+            str(id_processo),
             datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            usuario,
-            texto,
-            link_anexo
+            str(usuario),
+            str(texto),
+            str(link_anexo)
         ]
         ws.append_row(nova_msg)
-        st.cache_data.clear()
+        st.cache_data.clear() # Limpa cache para refletir na hora
         return True
     except Exception as e:
         st.error(f"Erro ao salvar mensagem: {e}")
         return False
-    
+
 def gerar_id_processo():
     try:
-        ws = get_worksheet("REGISTRO_DEVOLUCOES")
-        if not ws: return f"#DEV{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-
-        col_ids = ws.col_values(1)
-        ids_existentes = [id_val for id_val in col_ids[1:] if id_val and id_val.startswith("#DEV")]
+        # Usa LEITURA RÁPIDA (csv) para calcular o próximo ID
+        df = carregar_dados("REGISTRO_DEVOLUCOES")
         
-        if not ids_existentes:
+        if df.empty or "ID_PROCESSO" not in df.columns:
+             return f"#DEV{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+             
+        # Converte para string para garantir
+        ids_existentes = df["ID_PROCESSO"].astype(str).tolist()
+        ids_dev = [x for x in ids_existentes if str(x).startswith("#DEV")]
+        
+        if not ids_dev:
             seq = 1
         else:
             numeros = []
-            for id_proc in ids_existentes:
+            for id_proc in ids_dev:
                 try:
-                    num = int(id_proc.split('-')[-1])
-                    numeros.append(num)
+                    parts = id_proc.split('-')
+                    if len(parts) > 1:
+                        num = int(parts[-1])
+                        numeros.append(num)
                 except: continue
             seq = max(numeros) + 1 if numeros else 1
         
@@ -135,14 +156,15 @@ def gerar_id_processo():
     except Exception as e:
         print(f"Erro ao gerar ID: {e}")
         return f"#DEV{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-    
+
 def salvar_novo_processo(dados):
     try:
-        ws = get_worksheet("REGISTRO_DEVOLUCOES")
+        ws = get_worksheet_write("REGISTRO_DEVOLUCOES")
         if not ws: return False, None
 
         id_processo = gerar_id_processo()
         data_hoje = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        
         headers = ws.row_values(1)
         nova_linha = [""] * len(headers)
         
@@ -187,14 +209,14 @@ def salvar_novo_processo(dados):
         st.error(f"Erro ao salvar processo: {e}")
         return False, None
 
-# --- AUXILIAR DELETAR ---
 def salvar_dataframe(nome_da_aba, df):
     try:
-        ws = get_worksheet(nome_da_aba)
+        ws = get_worksheet_write(nome_da_aba)
         if not ws: return False
         
         ws.clear()
-        df = df.astype(str)
+        # Converte tudo para string para evitar erros de serialização JSON
+        df = df.fillna("").astype(str) 
         lista_dados = [df.columns.values.tolist()] + df.values.tolist()
         ws.update(lista_dados)
         st.cache_data.clear()
@@ -209,10 +231,14 @@ def excluir_processo_completo(id_processo):
     
     for aba in abas_alvo:
         try:
+            # Lê via CSV (Rápido)
             df = carregar_dados(aba)
             if not df.empty and "ID_PROCESSO" in df.columns:
-                mascara = df["ID_PROCESSO"] == id_processo
+                df["ID_PROCESSO"] = df["ID_PROCESSO"].astype(str) # Garante tipagem
+                mascara = df["ID_PROCESSO"] == str(id_processo)
+                
                 if mascara.any():
+                    # Filtra e reescreve a aba inteira (Estratégia mais segura que deletar linha a linha)
                     df_novo = df[~mascara]
                     salvar_dataframe(aba, df_novo)
         except Exception as e:
@@ -222,7 +248,7 @@ def excluir_processo_completo(id_processo):
 
 def atualizar_tratativa_completa(id_processo, novo_status_log, novo_status_fisc, cod_cob, link_anexo_cob, link_anexo_cte, cod_cte, veiculo, motorista, local_atual, local_destino, oc, data_cte, cob_data, ordem_de_carga):
     try:
-        ws = get_worksheet("REGISTRO_DEVOLUCOES")
+        ws = get_worksheet_write("REGISTRO_DEVOLUCOES")
         if not ws: return False
         
         cell = ws.find(id_processo)
@@ -233,15 +259,18 @@ def atualizar_tratativa_completa(id_processo, novo_status_log, novo_status_fisc,
                 try: return header.index(nome) + 1
                 except ValueError: return None
             
-            # Mapeamento
+            # Formatação segura de datas
+            dt_cte = data_cte.strftime("%d/%m/%Y") if isinstance(data_cte, (date, datetime)) else str(data_cte)
+            dt_cob = cob_data.strftime("%d/%m/%Y") if isinstance(cob_data, (date, datetime)) else str(cob_data)
+
             updates = [
                 ("STATUS", novo_status_log),
                 ("STATUS_FISCAL", novo_status_fisc),
                 ("COD_COB", cod_cob),
                 ("COB_ANEXO", link_anexo_cob),
                 ("COD_CTE", cod_cte),
-                ("DATA_DEVOLUCAO_CTE", data_cte.strftime("%d/%m/%Y") if isinstance(data_cte, (date, datetime)) else str(data_cte)),
-                ("COB_DATA", cob_data.strftime("%d/%m/%Y") if isinstance(cob_data, (date, datetime)) else str(cob_data)),
+                ("DATA_DEVOLUCAO_CTE", dt_cte),
+                ("COB_DATA", dt_cob),
                 ("CTE_ANEXO", link_anexo_cte),
                 ("VEICULO", veiculo),
                 ("ORDEM_DE_CARGA", ordem_de_carga),
@@ -251,9 +280,12 @@ def atualizar_tratativa_completa(id_processo, novo_status_log, novo_status_fisc,
                 ("LOCAL_DESTINO", local_destino)
             ]
 
+            # Nota de Performance: Isso aqui faz 1 request por célula. 
+            # Em produção massiva, deveríamos usar batch_update, mas para uso atual está ok.
             for col_nome, valor in updates:
                 idx = get_idx(col_nome)
                 if idx:
+                    # Lógica para não apagar anexo se vier vazio
                     if col_nome in ["COB_ANEXO", "CTE_ANEXO"] and not valor:
                         continue 
                     ws.update_cell(cell.row, idx, valor)
@@ -267,7 +299,7 @@ def atualizar_tratativa_completa(id_processo, novo_status_log, novo_status_fisc,
 
 def atualizar_status_devolucao(id_processo, novo_status):
     try:
-        ws = get_worksheet("REGISTRO_DEVOLUCOES")
+        ws = get_worksheet_write("REGISTRO_DEVOLUCOES")
         if not ws: return False
         
         cell = ws.find(id_processo)
@@ -284,7 +316,7 @@ def atualizar_status_devolucao(id_processo, novo_status):
     
 def salvar_itens_lote(id_processo, lista_itens):
     try:
-        ws = get_worksheet("REGISTRO_ITENS")
+        ws = get_worksheet_write("REGISTRO_ITENS")
         if not ws: return False
 
         headers = ws.row_values(1)
@@ -295,14 +327,14 @@ def salvar_itens_lote(id_processo, lista_itens):
             nova_linha = [""] * len(headers)
             mapa = {
                 "ID_ITEM": str(uuid.uuid4())[:8],
-                "ID_PROCESSO": id_processo,
+                "ID_PROCESSO": str(id_processo),
                 "DATA_REGISTRO": data_agora,
-                "NUMERO_NFD": item.get("NUMERO_NFD", ""),
-                "COD_ITEM": item.get("COD_ITEM", ""),
-                "DESCRICAO": item.get("DESCRICAO", ""),
-                "QTD": item.get("QTD", ""),
-                "VALOR_UNIT": item.get("VALOR_UNIT", ""),
-                "VALOR_TOTAL": item.get("VALOR_TOTAL", "")
+                "NUMERO_NFD": str(item.get("NUMERO_NFD", "")),
+                "COD_ITEM": str(item.get("COD_ITEM", "")),
+                "DESCRICAO": str(item.get("DESCRICAO", "")),
+                "QTD": str(item.get("QTD", "")),
+                "VALOR_UNIT": str(item.get("VALOR_UNIT", "")),
+                "VALOR_TOTAL": str(item.get("VALOR_TOTAL", ""))
             }
             for chave, valor in mapa.items():
                 if chave in headers:
@@ -310,6 +342,7 @@ def salvar_itens_lote(id_processo, lista_itens):
             novas_linhas.append(nova_linha)
         
         if novas_linhas:
+            # append_rows é eficiente (1 request para N linhas)
             ws.append_rows(novas_linhas, value_input_option="USER_ENTERED")
             st.cache_data.clear()
             return True
