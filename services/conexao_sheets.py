@@ -98,26 +98,38 @@ def carregar_mensagens(id_processo):
 @st.cache_resource
 def get_gspread_client():
     """
-    Autentica usando o JSON Bruto com modo 'Relaxado' (strict=False).
+    Autentica no Google forçando a correção da Chave Privada.
     """
+    # 1. Verifica se a variável existe
     if "GCP_JSON_BRUTO" not in st.secrets:
         st.error("⚠️ Configuração Faltando: 'GCP_JSON_BRUTO' não encontrado nos secrets.")
         return None
     
     try:
+        # 2. Carrega o JSON (com strict=False para tolerar caracteres estranhos)
         json_str = st.secrets["GCP_JSON_BRUTO"]
-        
-        # --- AQUI ESTÁ O TRUQUE ---
-        # strict=False permite que caracteres de controle (como quebras de linha invisíveis) passem.
         creds_dict = json.loads(json_str, strict=False)
         
+        # --- A CIRURGIA DE PRECISÃO ---
+        # O Google rejeita se a chave não tiver quebras de linha reais.
+        # Às vezes o json.loads traz como '\\n' (texto) em vez de '\n' (enter).
+        # Esta linha garante que seja sempre um 'Enter' real.
+        if "private_key" in creds_dict:
+            pk = creds_dict["private_key"]
+            # Se a chave NÃO tiver 'Enter' real, mas tiver '\n' escrito, a gente troca.
+            if "\n" not in pk and "\\n" in pk:
+                creds_dict["private_key"] = pk.replace("\\n", "\n")
+            # Reforço: Garante que o cabeçalho e rodapé estejam sozinhos
+            creds_dict["private_key"] = creds_dict["private_key"].replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+            creds_dict["private_key"] = creds_dict["private_key"].replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
+            # Remove quebras duplas acidentais que podem ter surgido
+            creds_dict["private_key"] = creds_dict["private_key"].replace("\n\n", "\n")
+        # ------------------------------
+
+        # 3. Autentica
         creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
         return gspread.authorize(creds)
 
-    except json.JSONDecodeError as e:
-        # Se falhar mesmo com strict=False, o erro é grave (chaves faltando, aspas erradas)
-        st.error(f"Erro de sintaxe no JSON: {e}")
-        return None
     except Exception as e:
         st.error(f"Erro Fatal de Auth (Gspread): {e}")
         return None
