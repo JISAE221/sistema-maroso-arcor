@@ -36,21 +36,32 @@ def autenticar_usuario(username, password):
         user_match = df_users[df_users['USERNAME'] == str(username)]
         
         if not user_match.empty:
-            # Pega o hash que veio do Google Sheets
-            hash_banco = user_match.iloc[0]['PASSWORD']
+            real_password = str(user_match.iloc[0]['PASSWORD']).strip()
             
-            # --- AQUI ESTAVA O PONTO CEGO ---
-            # Antes: if str(password) == hash_banco: (Comparava texto com hash)
-            # Agora: Usamos a função de verificação
-            if verificar_hash(password, hash_banco):
-                # SUCESSO!
-                nome = user_match.iloc[0].get('NOME', username)
-                cargo = user_match.iloc[0].get('CARGO', 'Colaborador')
-                return True, nome, cargo
-            else:
-                print(f"Falha de senha para {username}") # Log interno para debug
+            # Gera o hash do que foi digitado
+            senha_digitada_hash = hashlib.sha256(str(password).encode('utf-8')).hexdigest()
+
+            # --- DEBUG TEMPORÁRIO (O X9) ---
+            st.write(f"Hash na Planilha: |{real_password}|")
+            st.write(f"Hash Digitado...: |{senha_digitada_hash}|")
+            # -------------------------------
+
+            if senha_digitada_hash == real_password:
+
+                hash_banco = user_match.iloc[0]['PASSWORD']
                 
-        return False, None, None
+                # --- AQUI ESTAVA O PONTO CEGO ---
+                # Antes: if str(password) == hash_banco: (Comparava texto com hash)
+                # Agora: Usamos a função de verificação
+                if verificar_hash(password, hash_banco):
+                    # SUCESSO!
+                    nome = user_match.iloc[0].get('NOME', username)
+                    cargo = user_match.iloc[0].get('CARGO', 'Colaborador')
+                    return True, nome, cargo
+                else:
+                    print(f"Falha de senha para {username}") # Log interno para debug
+                    
+            return False, None, None
 
     except Exception as e:
         st.error(f"Erro Auth: {e}")
