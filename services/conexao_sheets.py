@@ -98,33 +98,32 @@ def carregar_mensagens(id_processo):
 @st.cache_resource
 def get_gspread_client():
     """
-    Autentica no Google forçando a correção da Chave Privada.
+    Autentica reconstruindo a chave privada para evitar erros de formatação.
     """
-    # 1. Verifica se a variável existe
     if "GCP_JSON_BRUTO" not in st.secrets:
         st.error("⚠️ Configuração Faltando: 'GCP_JSON_BRUTO' não encontrado nos secrets.")
         return None
     
     try:
-        # 2. Carrega o JSON (com strict=False para tolerar caracteres estranhos)
+        # 1. Carrega o JSON
         json_str = st.secrets["GCP_JSON_BRUTO"]
         creds_dict = json.loads(json_str, strict=False)
         
-        # --- A CIRURGIA DE PRECISÃO ---
-        # O Google rejeita se a chave não tiver quebras de linha reais.
-        # Às vezes o json.loads traz como '\\n' (texto) em vez de '\n' (enter).
-        # Esta linha garante que seja sempre um 'Enter' real.
+        # --- A RECONSTRUÇÃO TOTAL DA CHAVE ---
         if "private_key" in creds_dict:
             pk = creds_dict["private_key"]
-            # Se a chave NÃO tiver 'Enter' real, mas tiver '\n' escrito, a gente troca.
-            if "\n" not in pk and "\\n" in pk:
-                creds_dict["private_key"] = pk.replace("\\n", "\n")
-            # Reforço: Garante que o cabeçalho e rodapé estejam sozinhos
-            creds_dict["private_key"] = creds_dict["private_key"].replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
-            creds_dict["private_key"] = creds_dict["private_key"].replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
-            # Remove quebras duplas acidentais que podem ter surgido
-            creds_dict["private_key"] = creds_dict["private_key"].replace("\n\n", "\n")
-        # ------------------------------
+            
+            # 1. Remove cabeçalhos e rodapés para pegar só o "miolo" (o código em si)
+            pk_limpa = pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
+            
+            # 2. Remove TUDO que não for código (espaços, enters, barras, tabs)
+            # Isso corrige indentação errada, \n literais, espaços no final, tudo.
+            pk_limpa = pk_limpa.replace(" ", "").replace("\n", "").replace("\\n", "").replace("\r", "").replace("\t", "")
+            
+            # 3. Monta a chave perfeita novamente
+            # O Google aceita o miolo em linha única se tiver os cabeçalhos certos com \n
+            creds_dict["private_key"] = f"-----BEGIN PRIVATE KEY-----\n{pk_limpa}\n-----END PRIVATE KEY-----"
+        # -------------------------------------
 
         # 3. Autentica
         creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
