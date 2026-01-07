@@ -96,41 +96,51 @@ def carregar_mensagens(id_processo):
 
 # --- OTIMIZAÇÃO SÊNIOR: Cache na Autenticação ---
 @st.cache_resource
+@st.cache_resource
 def get_gspread_client():
     """
-    Autentica reconstruindo a chave privada para evitar erros de formatação.
+    Constrói as credenciais peça por peça a partir do secrets [gcp].
     """
-    if "GCP_JSON_BRUTO" not in st.secrets:
-        st.error("⚠️ Configuração Faltando: 'GCP_JSON_BRUTO' não encontrado nos secrets.")
+    # 1. Verifica se a seção [gcp] existe
+    if "gcp" not in st.secrets:
+        st.error("⚠️ Configuração Faltando: Seção '[gcp]' não encontrada nos secrets.")
         return None
-    
-    try:
-        # 1. Carrega o JSON
-        json_str = st.secrets["GCP_JSON_BRUTO"]
-        creds_dict = json.loads(json_str, strict=False)
-        
-        # --- A RECONSTRUÇÃO TOTAL DA CHAVE ---
-        if "private_key" in creds_dict:
-            pk = creds_dict["private_key"]
-            
-            # 1. Remove cabeçalhos e rodapés para pegar só o "miolo" (o código em si)
-            pk_limpa = pk.replace("-----BEGIN PRIVATE KEY-----", "").replace("-----END PRIVATE KEY-----", "")
-            
-            # 2. Remove TUDO que não for código (espaços, enters, barras, tabs)
-            # Isso corrige indentação errada, \n literais, espaços no final, tudo.
-            pk_limpa = pk_limpa.replace(" ", "").replace("\n", "").replace("\\n", "").replace("\r", "").replace("\t", "")
-            
-            # 3. Monta a chave perfeita novamente
-            # O Google aceita o miolo em linha única se tiver os cabeçalhos certos com \n
-            creds_dict["private_key"] = f"-----BEGIN PRIVATE KEY-----\n{pk_limpa}\n-----END PRIVATE KEY-----"
-        # -------------------------------------
 
-        # 3. Autentica
+    try:
+        # 2. Pega a chave privada
+        pk = st.secrets["gcp"]["private_key"]
+        
+        # --- A CORREÇÃO DE OURO ---
+        # Se a chave veio com quebras de linha visuais (Enter), o Python lê como '\n'.
+        # O Google às vezes prefere que não tenha espaços extras.
+        # Essa lógica garante que ela fique no formato que o Google gosta.
+        # Se tiver "\\n" (duas barras), vira '\n'.
+        pk = pk.replace("\\n", "\n")
+        
+        # 3. Monta o dicionário manualmente (Reconstruindo o JSON)
+        creds_dict = {
+            "type": st.secrets["gcp"]["type"],
+            "project_id": st.secrets["gcp"]["project_id"],
+            "private_key_id": st.secrets["gcp"]["private_key_id"],
+            "private_key": pk, # A chave tratada entra aqui
+            "client_email": st.secrets["gcp"]["client_email"],
+            "client_id": st.secrets["gcp"]["client_id"],
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_x509_cert_url": st.secrets["gcp"]["client_x509_cert_url"],
+            "universe_domain": "googleapis.com"
+        }
+
+        # 4. Autentica
         creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
         return gspread.authorize(creds)
 
+    except KeyError as e:
+        st.error(f"⚠️ Faltou alguma chave no TOML (ex: project_id): {e}")
+        return None
     except Exception as e:
-        st.error(f"Erro Fatal de Auth (Gspread): {e}")
+        st.error(f"Erro Fatal de Auth (Montagem Manual): {e}")
         return None
 
 def get_worksheet_write(nome_aba):
