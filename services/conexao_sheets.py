@@ -98,25 +98,25 @@ def carregar_mensagens(id_processo):
 @st.cache_resource
 def get_gspread_client():
     """
-    Autentica usando o JSON Bruto para evitar erros de formatação de string/TOML.
+    Autentica usando o JSON Bruto com modo 'Relaxado' (strict=False).
     """
-    # Verifica a nova variável
     if "GCP_JSON_BRUTO" not in st.secrets:
         st.error("⚠️ Configuração Faltando: 'GCP_JSON_BRUTO' não encontrado nos secrets.")
         return None
     
     try:
-        # 1. Carrega o JSON bruto string e converte para dicionário Python
-        # O json.loads lida automaticamente com escapes, \n e formatação.
         json_str = st.secrets["GCP_JSON_BRUTO"]
-        creds_dict = json.loads(json_str)
         
-        # 2. Cria as credenciais
+        # --- AQUI ESTÁ O TRUQUE ---
+        # strict=False permite que caracteres de controle (como quebras de linha invisíveis) passem.
+        creds_dict = json.loads(json_str, strict=False)
+        
         creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
         return gspread.authorize(creds)
 
     except json.JSONDecodeError as e:
-        st.error(f"Erro ao ler o JSON dos secrets. Verifique se copiou o arquivo .json inteiro corretamente. Detalhe: {e}")
+        # Se falhar mesmo com strict=False, o erro é grave (chaves faltando, aspas erradas)
+        st.error(f"Erro de sintaxe no JSON: {e}")
         return None
     except Exception as e:
         st.error(f"Erro Fatal de Auth (Gspread): {e}")
