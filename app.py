@@ -115,28 +115,6 @@ def check_password():
         
     return False
 
-def main():
-    st.title("Painel de Logística")
-    
-    # URL limpa (com o /export?format=csv)
-    url_planilha = "https://docs.google.com/spreadsheets/d/1QBMPQZ6jZJm5hEKHtRwtI1V3vZZcIkCHAqPe45N0YFE/export?format=csv&gid=23360391"
-    
-    # Chama a função (o cache vai atuar aqui)
-    df = get_google_sheet_data(url_planilha)
-    
-    if not df.empty:
-        st.success("Dados carregados com sucesso!")
-        st.dataframe(df) # Mostra a tabela bonita
-        
-        # Exemplo de uso: Contagem de cargos
-        st.write("Distribuição de Cargos:")
-        st.bar_chart(df['CARGO'].value_counts())
-    else:
-        st.warning("Nenhum dado disponível para exibir.")
-
-if __name__ == "__main__":
-    main()
-
 __version__ = "1.0.0"
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
