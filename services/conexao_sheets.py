@@ -13,10 +13,10 @@ from io import StringIO
 
 # Mapeamento de Abas para GIDs (LEITURA)
 TAB_IDS = {
-    "USUARIOS": "23360391",
+    "USUARIOS": "23360391",             # <--- ESSA LINHA É OBRIGATÓRIA!
     "REGISTRO_ITENS": "655653628",      
     "REGISTRO_MENSAGENS": "140953297",  
-    "REGISTRO_DEVOLUCOES": "673368922"  
+    "REGISTRO_DEVOLUCOES": "673368922"
 }
 
 # Escopos (ESCRITA)
@@ -28,31 +28,49 @@ SCOPE = [
 # ==============================================================================
 # 1. LEITURA RÁPIDA (CQRS - Query) - Via Requests
 # ==============================================================================
-@st.cache_data(ttl=60, show_spinner=False) # Aumentei TTL para 60s (padrão de mercado)
+@st.cache_data(ttl=30, show_spinner=False)
 def carregar_dados(nome_da_aba):
-    """Lê dados via CSV export (Rápido e Leve)"""
+    """Lê dados via CSV export (COM DEBUG VISUAL)"""
     try:
         if "ID_PLANILHA" not in st.secrets:
+            st.error("🚨 DEBUG: ID_PLANILHA não encontrado nos secrets!")
             return pd.DataFrame()
             
         sheet_id = st.secrets["ID_PLANILHA"]
-        gid = TAB_IDS.get(nome_da_aba, "0")
         
+        # DEBUG: Verifica se achou o ID da aba
+        if nome_da_aba not in TAB_IDS:
+            st.error(f"🚨 DEBUG: Aba '{nome_da_aba}' não encontrada no TAB_IDS. IDs disponíveis: {list(TAB_IDS.keys())}")
+            return pd.DataFrame()
+
+        gid = TAB_IDS[nome_da_aba]
+        
+        # Monta a URL
         url = f"https://docs.google.com/spreadsheets/d/{sheet_id}/export?format=csv&gid={gid}"
+        
+        # DEBUG: Mostra a URL que está tentando acessar (apague depois)
+        # st.write(f"Tentando baixar: {url}") 
         
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
         
         response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
+        
+        # Se der erro 400 ou 500, vai cair no except
+        response.raise_for_status() 
         response.encoding = 'utf-8'
         
-        # Converte para DF e força tudo como string para evitar erros de tipagem
-        return pd.read_csv(StringIO(response.text)).fillna("")
+        df = pd.read_csv(StringIO(response.text)).fillna("")
+        
+        # DEBUG: Verifica se o CSV veio vazio
+        if df.empty:
+            st.warning(f"🚨 DEBUG: A conexão funcionou, mas a aba '{nome_da_aba}' (GID {gid}) está vazia!")
+            
+        return df
         
     except Exception as e:
-        print(f"Erro leitura rápida ({nome_da_aba}): {e}")
+        st.error(f"🚨 DEBUG ERRO FATAL ({nome_da_aba}): {e}")
         return pd.DataFrame()
 
 def carregar_itens_por_processo(id_processo):
