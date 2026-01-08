@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time # Import essencial para o delay visual
-from datetime import datetime
+from datetime import datetime, date, timedelta, timezone
 from services.conexao_sheets import carregar_dados, atualizar_status_devolucao
 
 # ==============================================================================
@@ -299,7 +299,7 @@ if not df.empty and 'STATUS' in df.columns:
                 dias_aberto = 0
                 str_tempo = "Hoje"
                 if 'DATA_OBJ' in df.columns and not pd.isna(row['DATA_OBJ']):
-                     dias_aberto = (datetime.now() - row['DATA_OBJ']).days
+                     dias_aberto = ((datetime.now(timezone.utc)+timedelta(hours=-3)) - row['DATA_OBJ']).days
                      str_tempo = f"há {dias_aberto}d"
                 icon_time = "🔥" if dias_aberto > 7 else "🕒"
 
@@ -324,6 +324,7 @@ if not df.empty and 'STATUS' in df.columns:
             {st_fiscal}
         </span>
     </div>
+    
     <div class="k-body">
         <div class="k-row"><span class="k-icon" style="margin-right: 5px;">📄</span><strong>{nf_val}</strong></div>
         <div class="k-row"><span class="k-icon" style="margin-right: 5px;">👤</span><span>{resp_val}</span></div>
