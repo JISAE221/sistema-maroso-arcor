@@ -36,14 +36,14 @@ def carregar_dados(nome_da_aba):
     """Lê dados via CSV export (COM DEBUG VISUAL)"""
     try:
         if "ID_PLANILHA" not in st.secrets:
-            st.error("🚨 DEBUG: ID_PLANILHA não encontrado nos secrets!")
+            st.error("DEBUG: ID_PLANILHA não encontrado nos secrets!")
             return pd.DataFrame()
             
         sheet_id = st.secrets["ID_PLANILHA"]
         
         # DEBUG: Verifica se achou o ID da aba
         if nome_da_aba not in TAB_IDS:
-            st.error(f"🚨 DEBUG: Aba '{nome_da_aba}' não encontrada no TAB_IDS. IDs disponíveis: {list(TAB_IDS.keys())}")
+            st.error(f"DEBUG: Aba '{nome_da_aba}' não encontrada no TAB_IDS. IDs disponíveis: {list(TAB_IDS.keys())}")
             return pd.DataFrame()
 
         gid = TAB_IDS[nome_da_aba]
@@ -99,7 +99,7 @@ def carregar_mensagens(id_processo):
 def get_gspread_client():
     # 1. Valida se a seção existe
     if "gcp" not in st.secrets:
-        st.error("⚠️ Configuração Faltando: Seção '[gcp]' não encontrada.")
+        st.error("Configuração Faltando: Seção '[gcp]' não encontrada.")
         return None
 
     try:
@@ -120,7 +120,7 @@ def get_gspread_client():
             "client_x509_cert_url": st.secrets["gcp"]["client_x509_cert_url"]
         }
         
-        # 4. Tenta Autenticar
+        # 4. Tenta AutenticarQ
         creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPE)
         return gspread.authorize(creds)
 

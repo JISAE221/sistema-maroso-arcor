@@ -1,15 +1,16 @@
 import cloudinary
 import cloudinary.uploader
+import streamlit as st
 import os
-import re  # ✅ NOVO: Para sanitizar nomes
+import re 
 
-# ==========================================================
-# 🔐 SUAS CHAVES DO CLOUDINARY
-# ==========================================================
+# CHAVE
+# =========================================================
+
 cloudinary.config( 
-  cloud_name = "dkjdfvf9y", 
-  api_key = "962452838242836", 
-  api_secret = "-kAWHpgjbVgP5IX8SQk6VH33BII",
+  cloud_name = st.secrets["cloudinary"]["cloud_name"],
+  api_key = st.secrets["cloudinary"]["api_key"], 
+  api_secret = st.secrets["cloudinary"]["api_secret"],
   secure = True
 )
 # ==========================================================
