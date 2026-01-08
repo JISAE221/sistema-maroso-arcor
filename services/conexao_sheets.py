@@ -18,8 +18,8 @@ TAB_IDS = {
     "REGISTRO_ITENS": "655653628",
     "REGISTRO_MENSAGENS": "140953297",
     "REGISTRO_DEVOLUCOES": "673368922",
-    "DATABASE_X3": "1758449617",  # <--- ADICIONADO
-    "DATABASE_OC": "989316476"    # <--- ADICIONADO
+    "DATABASE_X3": "1758449617", 
+    "DATABASE_OC": "989316476"
 }
 
 # Escopos (ESCRITA)
@@ -68,12 +68,12 @@ def carregar_dados(nome_da_aba):
         
         # DEBUG: Verifica se o CSV veio vazio
         if df.empty:
-            st.warning(f"🚨 DEBUG: A conexão funcionou, mas a aba '{nome_da_aba}' (GID {gid}) está vazia!")
+            st.warning(f"DEBUG: A conexão funcionou, mas a aba '{nome_da_aba}' (GID {gid}) está vazia!")
             
         return df
         
     except Exception as e:
-        st.error(f"🚨 DEBUG ERRO FATAL ({nome_da_aba}): {e}")
+        st.error(f"DEBUG ERRO FATAL ({nome_da_aba}): {e}")
         return pd.DataFrame()
 
 def carregar_itens_por_processo(id_processo):
@@ -106,33 +106,12 @@ def get_gspread_client():
         # 2. PEGA A CHAVE PRIVADA
         pk = st.secrets["gcp"]["private_key"]
 
-        # --- O TRITURADOR DE ERROS DE FORMATAÇÃO ---
-        # Passo A: Remove aspas extras que possam ter sobrado no início/fim
-        pk = pk.strip('"')
-        
-        # Passo B: Converte "\n" (duas letras) escrito no texto em Quebra de Linha Real
-        # (Isso resolve se você copiou de um JSON que tinha \\n)
-        pk = pk.replace("\\n", "\n")
-        
-        # Passo C: Remove espaços em branco antes do BEGIN e depois do END
-        pk = pk.strip()
-        
-        # Passo D: Garante que os cabeçalhos tenham quebra de linha correta
-        # Se o texto ficou "colado", isso separa.
-        if "-----BEGIN PRIVATE KEY-----" in pk:
-            pk = pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
-            pk = pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
-        
-        # Passo E: Remove linhas vazias duplas que o Passo D pode ter criado
-        pk = pk.replace("\n\n", "\n")
-        # -------------------------------------------
-
         # 3. Monta o Dicionário Limpo
         creds_dict = {
             "type": st.secrets["gcp"]["type"],
             "project_id": st.secrets["gcp"]["project_id"],
             "private_key_id": st.secrets["gcp"]["private_key_id"],
-            "private_key": pk,  # <--- CHAVE TRATADA AQUI
+            "private_key": pk,
             "client_email": st.secrets["gcp"]["client_email"],
             "client_id": st.secrets["gcp"]["client_id"],
             "auth_uri": "https://accounts.google.com/o/oauth2/auth",
@@ -146,8 +125,6 @@ def get_gspread_client():
         return gspread.authorize(creds)
 
     except Exception as e:
-        # Se der erro, mostre os primeiros 50 caracteres da chave pra gente ver o que rolou
-        # (NUNCA MOSTRE A CHAVE INTEIRA EM PRODUÇÃO)
         debug_key = st.secrets["gcp"]["private_key"][:50] if "gcp" in st.secrets else "N/A"
         st.error(f"Erro Fatal Auth: {e} | Início da chave lida: {debug_key}...")
         return None

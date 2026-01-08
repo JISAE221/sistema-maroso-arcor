@@ -14,9 +14,8 @@ headers = {
 try:
     print("Tentando baixar dados...")
     response = requests.get(url, headers=headers)
-    response.raise_for_status() # Garante que vai parar aqui se der erro 400 ou 500
-    response.encoding = 'utf-8' # Força o requests a entender que é UTF-8
-# ...
+    response.raise_for_status()
+    response.encoding = 'utf-8'
     df = pd.read_csv(StringIO(response.text))
 
     # 2. SUCESSO: Agora sim processamos os dados
