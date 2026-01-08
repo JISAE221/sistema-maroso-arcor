@@ -2,10 +2,9 @@ import streamlit as st
 import pandas as pd
 import requests
 import gspread
-import json
 from google.oauth2.service_account import Credentials
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, timezone
 from io import StringIO
 
 # ==============================================================================
@@ -172,7 +171,7 @@ def gerar_id_processo():
         df = carregar_dados("REGISTRO_DEVOLUCOES")
         
         if df.empty or "ID_PROCESSO" not in df.columns:
-             return f"#DEV{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+             return f"#DEV{(datetime.now(timezone.utc)+timedelta(hours=-3)).strftime('%Y%m%d-%H%M%S')}"
              
         # Converte para string para garantir
         ids_existentes = df["ID_PROCESSO"].astype(str).tolist()
