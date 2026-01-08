@@ -153,7 +153,7 @@ def salvar_mensagem(id_processo, usuario, texto, link_anexo=""):
         nova_msg = [
             str(uuid.uuid4())[:8],
             str(id_processo),
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            (datetime.now(timezone.utc)+timedelta(hours=-3)).strftime("%Y-%m-%d %H:%M:%S"),
             str(usuario),
             str(texto),
             str(link_anexo)
@@ -190,12 +190,12 @@ def gerar_id_processo():
                 except: continue
             seq = max(numeros) + 1 if numeros else 1
         
-        ano_mes = datetime.now().strftime("%Y%m")
+        ano_mes = (datetime.now(timezone.utc)+timedelta(hours=-3)).strftime("%Y%m")
         return f"#DEV{ano_mes}-{seq:03d}"
         
     except Exception as e:
         print(f"Erro ao gerar ID: {e}")
-        return f"#DEV{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+        return f"#DEV{(datetime.now(timezone.utc)+timedelta(hours=-3)).strftime('%Y%m%d-%H%M%S')}"
 
 def salvar_novo_processo(dados):
     try:
@@ -203,7 +203,7 @@ def salvar_novo_processo(dados):
         if not ws: return False, None
 
         id_processo = gerar_id_processo()
-        data_hoje = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        data_hoje = (datetime.now(timezone.utc)+timedelta(hours=-3)).strftime("%d/%m/%Y %H:%M:%S")
         
         headers = ws.row_values(1)
         nova_linha = [""] * len(headers)
@@ -360,7 +360,7 @@ def salvar_itens_lote(id_processo, lista_itens):
         if not ws: return False
 
         headers = ws.row_values(1)
-        data_agora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
+        data_agora = (datetime.now(timezone.utc)+timedelta(hours=-3)).strftime("%d/%m/%Y %H:%M:%S")
         novas_linhas = []
         
         for item in lista_itens:
