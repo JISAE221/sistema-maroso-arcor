@@ -180,6 +180,7 @@ if btn_buscar and nf_busca:
     def get_val(chave, alt=""): return str(dados_existentes.get(chave, "") or alt) if ja_existe else ""
     
     st.session_state['cache_veiculo'] = get_val("VEICULO")
+    st.session_state['cache_motivo'] = motivo_limpo
     st.session_state['cache_tip_veiculo'] = get_val("TIPO_VEICULO")
     st.session_state['cache_motorista'] = get_val("MOTORISTA")
     st.session_state['cache_oc'] = get_val("OC")
@@ -287,7 +288,8 @@ if dados:
     # Novos Campos de Local
     if "input_local_atual" in st.session_state: st.session_state['cache_local_atual'] = st.session_state["input_local_atual"]
     if "input_local_destino" in st.session_state: st.session_state['cache_local_destino'] = st.session_state["input_local_destino"]
-
+    if "input_motivo" in st.session_state: st.session_state['cache_motivo'] = st.session_state["input_motivo"]
+    
     opcoes_abas = ["1. Ocorrência", "2. Itens (NFD)"]
     aba_selecionada = st.radio("Etapas:", opcoes_abas, horizontal=True, key="aba_ativa", label_visibility="collapsed")
     st.divider()
@@ -345,8 +347,14 @@ if dados:
         
         status_oc_calc = "ENCERRADA" if val_fim and len(str(val_fim)) > 5 else "ABERTA"
         cor_status = "green" if status_oc_calc == "ENCERRADA" else "red"
+        val_motivo_inicial = st.session_state.get("cache_motivo", dados.get("MOTIVO_COMPLETO", ""))
         st.caption(f"Status Atual: :{cor_status}[**{status_oc_calc}**]")
-        st.text_area("Motivo da NF Pesquisada", value=dados.get("MOTIVO_COMPLETO", ""), key="input_motivo", disabled=(modo=="existente"))
+        st.text_area(
+            "Motivo da NF Pesquisada", 
+            value=val_motivo_inicial,
+            key="input_motivo", 
+            disabled=(modo=="existente")
+        )
 
     # --- ABA 2: ITENS ---
     elif aba_selecionada == "2. Itens (NFD)":
@@ -426,6 +434,7 @@ if dados:
                     dt_dev_str = dt_dev_obj.strftime("%d/%m/%Y") if dt_dev_obj else ""
                     v_status_oc = "ENCERRADA" if v_dt_fim and len(str(v_dt_fim)) > 5 else "ABERTA"
                     v_prazo_txt, _ = calcular_prazo_alerta(dados.get("DATA_EMISSAO"))
+                    motivo_finbal = st.session_state.get("input_motivo". st.session_state.get("cache_motivo", ""))
                     
                     motivo_final = st.session_state.get("input_motivo", dados.get("MOTIVO_COMPLETO", ""))
                     pacote_salvar = {
@@ -477,8 +486,6 @@ if dados:
                                 "NUMERO_NFD": str(item["NFD"]), 
                                 "COD_ITEM": str(item["CODIGO"]), 
                                 "DESCRICAO": str(item["DESC"]),
-                                
-                              
                                 "QTD": qtd_raw,
                                 "VALOR_UNIT": val_unit_raw,
                                 "VALOR_TOTAL": val_total_raw
@@ -497,6 +504,7 @@ if dados:
                             'input_tip_veiculo', 'cache_tip_veiculo',
                             'input_motorista', 'cache_motorista',
                             'input_oc', 'cache_oc',
+                            'input_motivo', 'cache_motivo',
                             'input_dt_ini', 'cache_dt_ini',
                             'input_dt_fim', 'cache_dt_fim',
                             'input_tipo_carga', 'cache_tipo_carga',
