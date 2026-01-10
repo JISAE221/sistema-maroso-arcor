@@ -111,11 +111,11 @@ def check_password():
     st.button("ENTRAR", on_click=password_entered)
 
     if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-        st.error("😕 Usuário não encontrado ou senha incorreta.")
+        st.error("Usuário não encontrado ou senha incorreta.")
         
     return False
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(

@@ -133,8 +133,8 @@ if btn_buscar and nf_busca:
         'input_tipo_carga', 'cache_tipo_carga',
         'input_ordem_de_carga', 'cache_ordem',
         'input_data_devolucao', 'cache_data_devolucao',
-        'input_local_atual', 'cache_local_atual',     # <--- NOVO
-        'input_local_destino', 'cache_local_destino', # <--- NOVO
+        'input_local_atual', 'cache_local_atual',
+        'input_local_destino', 'cache_local_destino',
         'upload_geral'
     ]
     for k in keys_clean: 
@@ -243,12 +243,15 @@ if btn_buscar and nf_busca:
                 st.session_state['cache_oc'] = str(res_oc.get(COL_OC_OCORRENCIA, "") or "")
                 st.session_state['cache_dt_ini'] = str(res_oc.get(COL_OC_DATA_INI, "") or datetime.now().strftime("%d/%m/%Y"))
                 st.session_state['cache_dt_fim'] = str(res_oc.get(COL_OC_DATA_FIM, "") or "")
-                st.session_state['cache_local_atual'] = str(res_x3.get(COL_X3_LOCAL, "") or "") # <--- Pega Local do X3
-                st.session_state['cache_local_destino'] = "" # Novo começa vazio
+                st.session_state['cache_local_atual'] = str(res_x3.get(COL_X3_LOCAL, "") or "")
+                st.session_state['cache_local_destino'] = ""
+
+                raw_cte = res_x3.get(COL_X3_CTE,"")
+                cte_limpo = str(raw_cte).replace(".0", "").strip() if raw_cte else ""
                 
                 st.session_state['dados_encontrados'] = {
                     "NF": nf_busca, 
-                    "CTE": res_x3.get(COL_X3_CTE, ""),
+                    "CTE": cte_limpo,
                     "DATA_EMISSAO": res_x3.get(COL_X3_DATA, ""),
                     "LOCAL": res_x3.get(COL_X3_LOCAL, ""),
                     "MOTIVO_COMPLETO": motivo_limpo,
@@ -343,7 +346,7 @@ if dados:
         status_oc_calc = "ENCERRADA" if val_fim and len(str(val_fim)) > 5 else "ABERTA"
         cor_status = "green" if status_oc_calc == "ENCERRADA" else "red"
         st.caption(f"Status Atual: :{cor_status}[**{status_oc_calc}**]")
-        st.text_area("Motivo da NF Pesquisada", value=dados.get("MOTIVO_COMPLETO", ""), disabled=(modo=="existente"))
+        st.text_area("Motivo da NF Pesquisada", value=dados.get("MOTIVO_COMPLETO", ""), key="input_motivo", disabled=(modo=="existente"))
 
     # --- ABA 2: ITENS ---
     elif aba_selecionada == "2. Itens (NFD)":
@@ -413,8 +416,8 @@ if dados:
                     v_oc = st.session_state.get("cache_oc", "")
                     v_dt_ini = st.session_state.get("cache_dt_ini", "")
                     v_dt_fim = st.session_state.get("cache_dt_fim", "")
-                    v_local = st.session_state.get("cache_local_atual", "") # Pega Local Atual
-                    v_destino = st.session_state.get("cache_local_destino", "") # Pega Destino
+                    v_local = st.session_state.get("cache_local_atual", "") 
+                    v_destino = st.session_state.get("cache_local_destino", "")
                     
                     v_tipo_carga = st.session_state.get("cache_tipo_carga", "DIRETA")
                     v_ordem = st.session_state.get("cache_ordem", "") 
@@ -423,10 +426,12 @@ if dados:
                     dt_dev_str = dt_dev_obj.strftime("%d/%m/%Y") if dt_dev_obj else ""
                     v_status_oc = "ENCERRADA" if v_dt_fim and len(str(v_dt_fim)) > 5 else "ABERTA"
                     v_prazo_txt, _ = calcular_prazo_alerta(dados.get("DATA_EMISSAO"))
-
+                    
+                    motivo_final = st.session_state.get("input_motivo", dados.get("MOTIVO_COMPLETO", ""))
                     pacote_salvar = {
                         "NF": dados.get("NF"), 
                         "CTE": dados.get("CTE"),
+                        "MOTIVO": motivo_final,
                         "DATA_EMISSAO": dados.get("DATA_EMISSAO"),
                         "DATA_DEVOLUCAO_CTE": dt_dev_str,
                         "VEICULO": v_veiculo,
@@ -452,16 +457,15 @@ if dados:
                         itens_finais = []
                         for item in st.session_state['lista_itens_temp']:
                             
-                            # --- LIMPEZA RADICAL ---
-                            # 1. Quantidade: Converte para float primeiro (pra garantir) e depois INT
-                            # Isso remove o .0 matematicamente, sem virar texto
                             try:
-                                qtd_raw = int(float(item["QTD"])) 
+                                qtd_limpa = float(str(item["QTD"]).replace("'", ""))
+                                qtd_raw = int(qtd_limpa) 
                             except:
                                 qtd_raw = 0
                             
                             # 2. Valores: Converte para FLOAT puro
                             try:
+                                val_limpo = str(item["VALOR"]).replace("'", "").replace("R$", "")
                                 val_unit_raw = float(item["VALOR"])
                             except:
                                 val_unit_raw = 0.0
@@ -474,14 +478,14 @@ if dados:
                                 "COD_ITEM": str(item["CODIGO"]), 
                                 "DESCRICAO": str(item["DESC"]),
                                 
-                                # ✅ AQUI ESTÁ O SEGREDO: Enviar como NÚMERO, não Texto
-                                "QTD": qtd_raw,            # Vai chegar como 15 (número)
-                                "VALOR_UNIT": val_unit_raw, # Vai chegar como 100.5 (número)
-                                "VALOR_TOTAL": val_total_raw # Vai chegar como 1507.5 (número)
+                              
+                                "QTD": qtd_raw,
+                                "VALOR_UNIT": val_unit_raw,
+                                "VALOR_TOTAL": val_total_raw
                             })
                         
                         salvar_itens_lote(id_gerado, itens_finais)
-                        st.success(f"✅ Processo {id_gerado} Salvo com Documento!")
+                        st.success(f"Processo {id_gerado} Salvo com Documento!")
                         
                         # Limpa tudo
                         st.session_state['dados_encontrados'] = {}

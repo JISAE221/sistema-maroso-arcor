@@ -4,12 +4,23 @@ import requests
 import gspread
 from google.oauth2.service_account import Credentials
 import uuid
-from datetime import datetime, date, timedelta, timezone
+from datetime import datetime, date, timedelta
+from zoneinfo import ZoneInfo
 from io import StringIO
 
 # ==============================================================================
 # CONFIGURAÇÕES GERAIS
 # ==============================================================================
+
+TZ_BR = ZoneInfo("America/Sao_Paulo")
+
+def get_data_atual_iso():
+    """Retorna data/hora atual formatada para banco de dados (YYYY-MM-DD HH:MM:SS)"""
+    return datetime.now(TZ_BR).strftime("%Y-%m-%d %H:%M:%S")
+
+def get_data_atual_br():
+    """Retorna data/hora atual formatada para exibição (DD/MM/YYYY HH:MM:SS)"""
+    return datetime.now(TZ_BR).strftime("%d/%m/%Y %H:%M:%S")
 
 # Mapeamento de Abas para GIDs (LEITURA)
 TAB_IDS = {
@@ -150,16 +161,19 @@ def salvar_mensagem(id_processo, usuario, texto, link_anexo=""):
         ws = get_worksheet_write("REGISTRO_MENSAGENS")
         if not ws: return False
         
+        # OTIMIZAÇÃO: Usamos o helper com ZoneInfo
+        data_hora = get_data_atual_iso() 
+        
         nova_msg = [
             str(uuid.uuid4())[:8],
             str(id_processo),
-            (datetime.now(timezone.utc)+timedelta(hours=-3)).strftime("%Y-%m-%d %H:%M:%S"),
+            data_hora,  # <--- Data Limpa e Correta
             str(usuario),
             str(texto),
             str(link_anexo)
         ]
         ws.append_row(nova_msg)
-        st.cache_data.clear() # Limpa cache para refletir na hora
+        st.cache_data.clear()
         return True
     except Exception as e:
         st.error(f"Erro ao salvar mensagem: {e}")
@@ -167,13 +181,17 @@ def salvar_mensagem(id_processo, usuario, texto, link_anexo=""):
 
 def gerar_id_processo():
     try:
-        # Usa LEITURA RÁPIDA (csv) para calcular o próximo ID
+        # Pega a hora certa no Brasil
+        agora = datetime.now(TZ_BR)
+        
         df = carregar_dados("REGISTRO_DEVOLUCOES")
         
+        # Fallback de segurança: Se falhar a leitura, gera ID com timestamp BR
         if df.empty or "ID_PROCESSO" not in df.columns:
-             return f"#DEV{(datetime.now(timezone.utc)+timedelta(hours=-3)).strftime('%Y%m%d-%H%M%S')}"
+             timestamp = agora.strftime('%Y%m%d-%H%M%S')
+             return f"#DEV{timestamp}"
              
-        # Converte para string para garantir
+        # Lógica de Sequencial
         ids_existentes = df["ID_PROCESSO"].astype(str).tolist()
         ids_dev = [x for x in ids_existentes if str(x).startswith("#DEV")]
         
@@ -190,12 +208,14 @@ def gerar_id_processo():
                 except: continue
             seq = max(numeros) + 1 if numeros else 1
         
-        ano_mes = (datetime.now(timezone.utc)+timedelta(hours=-3)).strftime("%Y%m")
+        # Gera o prefixo com o Ano/Mês CORRETOS do Brasil
+        ano_mes = agora.strftime("%Y%m")
         return f"#DEV{ano_mes}-{seq:03d}"
         
     except Exception as e:
         print(f"Erro ao gerar ID: {e}")
-        return f"#DEV{(datetime.now(timezone.utc)+timedelta(hours=-3)).strftime('%Y%m%d-%H%M%S')}"
+        # Fallback também com ZoneInfo
+        return f"#DEV{datetime.now(TZ_BR).strftime('%Y%m%d-%H%M%S')}"
 
 def salvar_novo_processo(dados):
     try:
@@ -203,7 +223,7 @@ def salvar_novo_processo(dados):
         if not ws: return False, None
 
         id_processo = gerar_id_processo()
-        data_hoje = (datetime.now(timezone.utc)+timedelta(hours=-3)).strftime("%d/%m/%Y %H:%M:%S")
+        data_hoje = get_data_atual_br() 
         
         headers = ws.row_values(1)
         nova_linha = [""] * len(headers)
@@ -360,7 +380,10 @@ def salvar_itens_lote(id_processo, lista_itens):
         if not ws: return False
 
         headers = ws.row_values(1)
-        data_agora = (datetime.now(timezone.utc)+timedelta(hours=-3)).strftime("%d/%m/%Y %H:%M:%S")
+        
+        # Uso do helper global
+        data_agora = get_data_atual_br()
+        
         novas_linhas = []
         
         for item in lista_itens:
