@@ -381,46 +381,6 @@ else:
 
 st.divider()
 
-# --- KPI DASHBOARD (COM VISUAL PERSONALIZADO) ---
-if not df_filtered.empty:
-    
-    # CSS com Variáveis do Streamlit (var(--...))
-    st.markdown("""
-    <style>
-        .kpi-card {
-            /* Fundo que se adapta ao tema (cinza claro no light, escuro no dark) */
-            background-color: var(--secondary-background-color); 
-            border-radius: 8px;
-            padding: 15px 20px;
-            border-left: 5px solid #888;
-            /* Sombra suave */
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            text-align: left;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-        .kpi-label { 
-            font-size: 13px; 
-            /* Cor do texto principal, mas com opacidade para parecer "rótulo" */
-            color: var(--text-color); 
-            opacity: 0.7;
-            margin-bottom: 5px; 
-            text-transform: uppercase; 
-            letter-spacing: 0.5px;
-            font-weight: 600;
-        }
-        .kpi-val { 
-            font-size: 32px; 
-            font-weight: 700; 
-            /* Cor do texto principal (Preto ou Branco automático) */
-            color: var(--text-color); 
-            line-height: 1; 
-        }
-    </style>
-    """, unsafe_allow_html=True)
-
 total = len(df_filtered)
 abertos = len(df_filtered[df_filtered['STATUS'] == 'ABERTO'])
 concluidos = len(df_filtered[df_filtered['STATUS'] == 'CONCLUÍDO'])
