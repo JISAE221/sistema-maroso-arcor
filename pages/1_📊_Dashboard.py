@@ -268,56 +268,27 @@ cargo_user = st.session_state.get('cargo', 'Analista de Dados')
 # 5. DASHBOARD LAYOUT
 # ==============================================================================
 
-# --- HEADER (HTML CUSTOM) ---
+# --- HEADER ---
 st.markdown(f"""
 <div class="welcome-container">
     <div class="welcome-text">
         <h2>{saudacao}, {usuario_nome}!</h2>
-        <p>Painel de Controle Unificado &bull; <strong>{cargo_user}</strong></p>
+        <p>Painel de Controle Unificado - <strong>{cargo_user}</strong></p>
     </div>
     <div class="date-badge">📅 {agora_br.strftime('%d/%m/%Y')}</div>
 </div>
 """, unsafe_allow_html=True)
 
-# --- KPIs (AGORA USANDO HTML GRID PARA NÃO QUEBRAR O LAYOUT) ---
-# Aqui eliminamos o st.metric e usamos nosso próprio HTML que respeita o CSS acima
-st.markdown(f"""
-<div class="kpi-container">
-    <div class="kpi-card">
-        <div class="kpi-title">📦 Fila (Aberto)</div>
-        <div class="kpi-value">{total_aberto}</div>
-        <div class="kpi-footer"><span class="badge-info">Aguardando</span></div>
-    </div>
-    
-    <div class="kpi-card">
-        <div class="kpi-title">⚖️ Pend. Fiscal</div>
-        <div class="kpi-value">{pendencia_fiscal}</div>
-        <div class="kpi-footer"><span class="badge-warn">Atenção Necessária</span></div>
-    </div>
-    
-    <div class="kpi-card" style="border-left: 4px solid #e74c3c;">
-        <div class="kpi-title">🔥 Atrasados (>7d)</div>
-        <div class="kpi-value" style="color: #e74c3c;">{total_atrasados}</div>
-        <div class="kpi-footer"><span class="badge-alert">Crítico</span></div>
-    </div>
-    
-    <div class="kpi-card">
-        <div class="kpi-title">🏢 No Armazém</div>
-        <div class="kpi-value">{itens_em_armazem}</div>
-        <div class="kpi-footer"><span class="badge-ok">Em Estoque</span></div>
-    </div>
-    
-    <div class="kpi-card">
-        <div class="kpi-title">📍 Top Destino</div>
-        <div class="kpi-value" style="font-size: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{destinos_populares}">
-            {destinos_populares}
-        </div>
-        <div class="kpi-footer"><span class="badge-info">Mais frequente</span></div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+# --- KPIs ---
+st.markdown("#### 📊 Métricas Chave")
+k1, k2, k3, k4, k5 = st.columns(5)
+k1.metric("📦 Fila (Aberto)", total_aberto, delta_color="off")
+k2.metric("⚖️ Pend. Fiscal", pendencia_fiscal, delta="Atenção", delta_color="inverse")
+k3.metric("🔥 Atrasados (>7d)", total_atrasados, delta="Crítico", delta_color="inverse")
+k4.metric("🏢 No Armazém", itens_em_armazem)
+k5.metric("📍 Top Destino", destinos_populares)
 
-st.write("") # Espaço respiro
+st.divider()
 
 # ==============================================================================
 # 6. KANBAN (HTML SEGURO E CORRIGIDO)
