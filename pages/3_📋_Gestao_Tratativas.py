@@ -113,56 +113,61 @@ st.markdown("""
     /* Esconde Nav Nativa */
     [data-testid="stSidebarNav"] {display: none;}
     
-    /* --- CARD DESIGN (Igual Page 5) --- */
+    /* --- CARD DESIGN RESPONSIVO --- */
     .kpi-card {
         background-color: transparent;
         border-radius: 8px;
         padding: 15px 20px;
         margin-bottom: 20px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-        border: 1px solid rgba(255,255,255,0.1);
-        height: 100px; /* Altura fixa para alinhar */
+        /* Sombra suave que funciona bem nos dois modos */
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+        /* Borda cinza bem clara e transparente para funcionar no Branco e no Preto */
+        border: 1px solid rgba(128, 128, 128, 0.2);
+        height: 100px;
         display: flex;
         flex-direction: column;
         justify-content: center;
     }
+    
     .kpi-label {
         font-size: 12px;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 1px;
-        color: #a0a0a0;
+        /* COR MÁGICA: Pega a cor do texto do tema e aplica 60% de opacidade */
+        color: var(--text-color);
+        opacity: 0.6;
         margin-bottom: 5px;
     }
+    
     .kpi-value {
         font-size: 32px;
         font-weight: 800;
-        color: #ffffff;
+        /* COR MÁGICA: Fica Branco no Dark Mode e Preto no Light Mode */
+        color: var(--text-color);
         line-height: 1;
     }
+    
     .kpi-sub {
         font-size: 11px;
         margin-top: 8px;
-        color: #e74c3c;
+        color: #e74c3c; /* Vermelho é ok manter fixo, pois dá leitura nos dois */
         font-weight: 600;
     }
     
-    /* --- CORES DAS BORDAS --- */
-    .border-white  { border-left: 5px solid #e0e0e0; }
+    /* --- CORES DAS BORDAS LATERAIS (Mantém fixas pois são identidade) --- */
+    .border-white  { border-left: 5px solid var(--text-color); } /* Borda "Total" tbm vira responsiva */
     .border-red    { border-left: 5px solid #e74c3c; }
     .border-green  { border-left: 5px solid #2ecc71; }
     .border-orange { border-left: 5px solid #f39c12; } 
     
-    /* Sidebar e Footer */
+    /* Ajustes Gerais */
     section[data-testid="stSidebar"] > div {height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding-top: 0px !important; padding-bottom: 20px !important;}
     div[data-testid="stSidebarUserContent"] {padding-top: 2rem !important; display: flex; flex-direction: column; height: 100%;}
-    div[data-testid="stImage"] { margin-bottom: 20px; }
     .footer-container { margin-top: auto; }
     
-    /* Chat e Outros */
-    .chat-meta { font-size: 0.75rem; color: #888; margin-bottom: 2px; }
-    .chat-user { font-weight: bold; color: #FF4B4B; margin-right: 5px; }
-    .badge-total { background-color: rgba(0, 200, 83, 0.15); color: #00C853; padding: 4px 10px; border-radius: 6px; border: 1px solid #00C853; font-weight: bold; font-size: 13px; white-space: nowrap; }
+    .chat-meta { font-size: 0.75rem; color: var(--text-color); opacity: 0.7; margin-bottom: 2px; }
+    .badge-total { background-color: rgba(0, 200, 83, 0.1); color: #00C853; padding: 4px 10px; border-radius: 6px; border: 1px solid #00C853; font-weight: bold; font-size: 13px; white-space: nowrap; }
     .btn-ghost { display: inline-flex; align-items: center; background-color: transparent !important; border: 1px solid #FF4B4B !important; color: #FF4B4B !important; padding: 4px 12px; border-radius: 4px; text-decoration: none; font-size: 14px; font-weight: 500; transition: all 0.2s; }
 </style>
 """, unsafe_allow_html=True)

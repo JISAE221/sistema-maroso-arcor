@@ -20,40 +20,56 @@ st.markdown("""
     /* Esconde Nav Nativa */
     [data-testid="stSidebarNav"] {display: none;}
     
-    /* Card Estilo Executivo */
+    /* Card Estilo Executivo (Sem fundo & Responsivo) */
     .kpi-card {
         background-color: transparent;
         border-radius: 4px;
         padding: 15px 20px;
         margin-bottom: 20px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        border: 1px solid rgba(255,255,255,0.05);
+        /* Sombra suave que funciona nos dois temas */
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
+        /* Borda cinza translúcida (funciona no dark e light) */
+        border: 1px solid rgba(128,128,128,0.2);
     }
+    
     .kpi-label {
         font-size: 11px;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 1px;
-        color: #a0a0a0;
+        /* Texto responsivo com opacidade */
+        color: var(--text-color);
+        opacity: 0.6;
         margin-bottom: 5px;
     }
+    
     .kpi-value {
         font-size: 28px;
         font-weight: 700;
-        color: #ffffff;
+        /* COR MÁGICA: Muda sozinho (Preto no Light / Branco no Dark) */
+        color: var(--text-color);
         line-height: 1.2;
     }
+    
     .kpi-sub {
         font-size: 12px;
         margin-top: 5px;
         color: #e74c3c;
     }
     
-    /* Bordas Coloridas */
-    .border-white  { border-left: 5px solid #e0e0e0; }
+    /* --- BORDAS COLORIDAS --- */
+    /* Branco no Dark / Preto no Light */
+    .border-white  { border-left: 5px solid var(--text-color); } 
+    
+    /* Cores Fixas (Funcionam bem nos dois fundos) */
     .border-red    { border-left: 5px solid #e74c3c; }
     .border-green  { border-left: 5px solid #2ecc71; }
-    .border-orange { border-left: 5px solid #f39c12; } 
+    .border-blue   { border-left: 5px solid #3498db; } /* Page 5 usa Azul */
+    
+    /* Ajustes Gerais */
+    section[data-testid="stSidebar"] > div {height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding-top: 0px !important; padding-bottom: 20px !important;}
+    div[data-testid="stSidebarUserContent"] {padding-top: 2rem !important; display: flex; flex-direction: column; height: 100%;}
+    .footer-container { margin-top: auto; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -154,8 +170,6 @@ def modal_rastro(item):
     col_log1.text_input("Motorista", value=item.get('MOTORISTA', '-'), disabled=True)
     col_log2.text_input("Veículo", value=item.get('VEICULO', '-'), disabled=True)
     col_log3.text_input("Destino Atual", value=item.get('LOCAL_DESTINO', '-'), disabled=True)
-    if st.button("Fechar Detalhes", use_container_width=True):
-        st.rerun()
 
 # ==============================================================================
 # 4. INTERFACE PRINCIPAL
@@ -218,8 +232,7 @@ with c_kpi3:
 
 with c_kpi4:
     # Se tiver sem destino, mostra em vermelho
-    alerta = f"<div class='kpi-sub'>⚠️ {sem_destino} não alocados</div>" if sem_destino > 0 else ""
-    st.markdown(card_html("Pend. de Destino", f"{sem_destino}", "border-red", alerta), unsafe_allow_html=True)
+    st.markdown(card_html("Pend. de Destino", f"{sem_destino}", "border-red"), unsafe_allow_html=True)
 
 
 # --- 3. BARRA DE FILTROS CLEAN (ABAIXO DOS KPIS) ---
