@@ -20,9 +20,9 @@ st.markdown("""
     /* Esconde Nav Nativa */
     [data-testid="stSidebarNav"] {display: none;}
     
-    /* --- CSS DOS CARDS (IGUAL PAGE 3) --- */
+    /* Card Estilo Executivo */
     .kpi-card {
-        background-color: #262730; /* Fundo escuro padrão */
+        background-color: #262730;
         border-radius: 4px;
         padding: 15px 20px;
         margin-bottom: 20px;
@@ -46,20 +46,14 @@ st.markdown("""
     .kpi-sub {
         font-size: 12px;
         margin-top: 5px;
-        color: #e74c3c; /* Cor de alerta padrão */
+        color: #e74c3c;
     }
     
     /* Bordas Coloridas */
-    .border-white { border-left: 5px solid #e0e0e0; }
-    .border-green { border-left: 5px solid #2ecc71; }
-    .border-blue  { border-left: 5px solid #3498db; }
-    .border-red   { border-left: 5px solid #e74c3c; }
-
-    /* Ajuste Sidebar */
-    section[data-testid="stSidebar"] > div {height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding-top: 0px !important; padding-bottom: 20px !important;}
-    div[data-testid="stSidebarUserContent"] {padding-top: 2rem !important; display: flex; flex-direction: column; height: 100%;}
-    div[data-testid="stImage"] { margin-bottom: 20px; }
-    .footer-container { margin-top: auto; }
+    .border-white  { border-left: 5px solid #e0e0e0; }
+    .border-red    { border-left: 5px solid #e74c3c; }
+    .border-green  { border-left: 5px solid #2ecc71; }
+    .border-orange { border-left: 5px solid #f39c12; } 
 </style>
 """, unsafe_allow_html=True)
 
