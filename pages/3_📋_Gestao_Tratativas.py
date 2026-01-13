@@ -110,19 +110,24 @@ def calcular_total_processo(id_proc):
 # ==============================================================================
 st.markdown("""
 <style>
+    /* Esconde Nav Nativa */
     [data-testid="stSidebarNav"] {display: none;}
     
     /* --- CARD DESIGN (Igual Page 5) --- */
     .kpi-card {
-        background-color: #262730;
-        border-radius: 4px;
+        background-color: #262730; /* Fundo Escuro Fixo */
+        border-radius: 8px;
         padding: 15px 20px;
         margin-bottom: 20px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        border: 1px solid rgba(255,255,255,0.05);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        border: 1px solid rgba(255,255,255,0.1);
+        height: 100px; /* Altura fixa para alinhar */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
     .kpi-label {
-        font-size: 11px;
+        font-size: 12px;
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 1px;
@@ -130,15 +135,16 @@ st.markdown("""
         margin-bottom: 5px;
     }
     .kpi-value {
-        font-size: 28px;
-        font-weight: 700;
+        font-size: 32px;
+        font-weight: 800;
         color: #ffffff;
-        line-height: 1.2;
+        line-height: 1;
     }
     .kpi-sub {
-        font-size: 12px;
-        margin-top: 5px;
+        font-size: 11px;
+        margin-top: 8px;
         color: #e74c3c;
+        font-weight: 600;
     }
     
     /* --- CORES DAS BORDAS --- */
@@ -147,10 +153,17 @@ st.markdown("""
     .border-green  { border-left: 5px solid #2ecc71; }
     .border-orange { border-left: 5px solid #f39c12; } 
     
-    /* Sidebar */
+    /* Sidebar e Footer */
     section[data-testid="stSidebar"] > div {height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding-top: 0px !important; padding-bottom: 20px !important;}
     div[data-testid="stSidebarUserContent"] {padding-top: 2rem !important; display: flex; flex-direction: column; height: 100%;}
+    div[data-testid="stImage"] { margin-bottom: 20px; }
     .footer-container { margin-top: auto; }
+    
+    /* Chat e Outros */
+    .chat-meta { font-size: 0.75rem; color: #888; margin-bottom: 2px; }
+    .chat-user { font-weight: bold; color: #FF4B4B; margin-right: 5px; }
+    .badge-total { background-color: rgba(0, 200, 83, 0.15); color: #00C853; padding: 4px 10px; border-radius: 6px; border: 1px solid #00C853; font-weight: bold; font-size: 13px; white-space: nowrap; }
+    .btn-ghost { display: inline-flex; align-items: center; background-color: transparent !important; border: 1px solid #FF4B4B !important; color: #FF4B4B !important; padding: 4px 12px; border-radius: 4px; text-decoration: none; font-size: 14px; font-weight: 500; transition: all 0.2s; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -421,8 +434,7 @@ with c1:
     st.markdown(card_html("Total de Processos", f"{total}", "border-white"), unsafe_allow_html=True)
 
 with c2:
-    sub = f"<div class='kpi-sub'>🔥 {abertos} precisam de atenção</div>" if abertos > 0 else ""
-    st.markdown(card_html("Em Aberto", f"{abertos}", "border-red", sub), unsafe_allow_html=True)
+    st.markdown(card_html("Em Aberto", f"{abertos}", "border-red"), unsafe_allow_html=True)
 
 with c3:
     st.markdown(card_html("Concluídos", f"{concluidos}", "border-green"), unsafe_allow_html=True)
