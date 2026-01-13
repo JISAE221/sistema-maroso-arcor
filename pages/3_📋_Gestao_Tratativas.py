@@ -115,7 +115,7 @@ st.markdown("""
     
     /* --- CARD DESIGN (Igual Page 5) --- */
     .kpi-card {
-        background-color: #262730; /* Fundo Escuro Fixo */
+        background-color: transparent;
         border-radius: 8px;
         padding: 15px 20px;
         margin-bottom: 20px;

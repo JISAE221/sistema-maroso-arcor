@@ -22,7 +22,7 @@ st.markdown("""
     
     /* Card Estilo Executivo */
     .kpi-card {
-        background-color: #262730;
+        background-color: transparent;
         border-radius: 4px;
         padding: 15px 20px;
         margin-bottom: 20px;
