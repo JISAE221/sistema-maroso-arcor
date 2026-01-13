@@ -641,8 +641,13 @@ if tipo_visualizacao == "Lista":
                     st.markdown("---")
                     c_cob1, c_cob2 = st.columns([1, 1.5])
                     with c_cob1:
+                        
                         val_cob_atual = str(row.get('COD_COB', ''))
-                        if val_cob_atual == "None": val_cob_atual = ""
+                        if val_cob_atual.lower() in ["nan", "none", "nat"]:
+                            val_cob_atual = ""
+                        if val_cob_atual.endswith('.0'):
+                            val_cob_atual = val_cob_atual[:-2]
+
                         n_cod_cob = c_cob1.text_input("Cód. Ocorrência", value=val_cob_atual)
                         data_str_cob = str(row.get("COB_DATA",""))
                         val_data_cob = None
