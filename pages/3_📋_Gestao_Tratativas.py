@@ -150,7 +150,7 @@ with st.sidebar:
     st.page_link("pages/2_🚛_Processo_Devolucao.py", label="Novo Processo", icon="🚛")
     st.page_link("pages/3_📋_Gestao_Tratativas.py", label="Gestão Tratativas", icon="📋")
     st.page_link("pages/4_📍_Posições.py", label="Posições & Rotas", icon="📍")
-    st.page_link("pages/5_📦Estoque_Destino.py", label="Estoque Destino", icon = "📦") 
+    st.page_link("pages/5_📦_Estoque_Destino.py", label="Estoque Destino", icon = "📦") 
 
     st.markdown('<div class="footer-container">', unsafe_allow_html=True)
     st.markdown("---")
@@ -166,7 +166,7 @@ with st.sidebar:
     if st.button("Sair", use_container_width=True):
         st.session_state["logado"] = False
         st.switch_page("app.py")
-        
+
     st.markdown('</div>', unsafe_allow_html=True)
 
 # Importa as funções do Backend
