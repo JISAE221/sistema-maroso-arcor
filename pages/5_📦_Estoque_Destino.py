@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from datetime import datetime, timedelta
+from datetime import datetime
 from services.conexao_sheets import carregar_dados
 
 # ==============================================================================
@@ -15,32 +15,14 @@ if "logado" not in st.session_state or not st.session_state["logado"]:
 # ==============================================================================
 st.set_page_config(page_title="Estoque por Destino", page_icon="📦", layout="wide")
 
-# CSS Personalizado
 st.markdown("""
 <style>
     [data-testid="stSidebarNav"] {display: none;}
-    
-    /* Metrics */
-    [data-testid="stMetricValue"] {
-        font-size: 26px; color: #00B17C;
-    }
-    div[data-testid="stMetricLabel"] { font-weight: bold; }
-    
-    /* Container de Filtros */
-    .stExpander {
-        border: 1px solid rgba(128, 128, 128, 0.2);
-        border-radius: 8px;
-        background-color: #1E1E1E; /* Ajuste conforme seu tema */
-    }
-    
-    /* Sidebar */
-    section[data-testid="stSidebar"] > div {
-        height: 100vh; display: flex; flex-direction: column; justify-content: space-between;
-        padding-top: 0px !important; padding-bottom: 20px !important;
-    }
-    div[data-testid="stSidebarUserContent"] {
-        padding-top: 2rem !important; display: flex; flex-direction: column; height: 100%;
-    }
+    [data-testid="stMetricValue"] {font-size: 26px; color: #00B17C;}
+    div[data-testid="stMetricLabel"] {font-weight: bold;}
+    .stExpander {border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 8px; background-color: #1E1E1E;}
+    section[data-testid="stSidebar"] > div {height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding-top: 0px !important; padding-bottom: 20px !important;}
+    div[data-testid="stSidebarUserContent"] {padding-top: 2rem !important; display: flex; flex-direction: column; height: 100%;}
     div[data-testid="stImage"] { margin-bottom: 20px; }
     .footer-container { margin-top: auto; }
 </style>
@@ -78,7 +60,7 @@ with st.sidebar:
     st.markdown('</div>', unsafe_allow_html=True)
 
 # ==============================================================================
-# 3. FUNÇÕES DE CARGA E TRATAMENTO
+# 3. FUNÇÕES DE SUPORTE
 # ==============================================================================
 def converter_float(valor):
     if pd.isna(valor) or valor == "": return 0.0
@@ -89,15 +71,13 @@ def converter_float(valor):
     try: return float(v)
     except: return 0.0
 
-@st.cache_data(ttl=60) # Cache de 60 segundos para performance
+@st.cache_data(ttl=60)
 def carregar_dados_consolidados():
-    # 1. Carrega tabelas
     df_processos = carregar_dados("REGISTRO_DEVOLUCOES")
     df_itens = carregar_dados("REGISTRO_ITENS")
 
     if df_processos.empty or df_itens.empty: return pd.DataFrame()
 
-    # 2. Normaliza Chaves
     col_id_proc = "ID_PROCESSO"
     col_id_item = "ID_PROCESSO"
     if col_id_item not in df_itens.columns:
@@ -107,155 +87,159 @@ def carregar_dados_consolidados():
     df_processos[col_id_proc] = df_processos[col_id_proc].astype(str).str.strip()
     df_itens[col_id_item] = df_itens[col_id_item].astype(str).str.strip()
 
-    # 3. Tratamento Numérico
     col_val = "VALOR_TOTAL" if "VALOR_TOTAL" in df_itens.columns else "VALOR"
     df_itens["VALOR_TOTAL_FLOAT"] = df_itens[col_val].apply(converter_float) if col_val in df_itens.columns else 0.0
     df_itens["QTD_FLOAT"] = df_itens["QTD"].apply(converter_float) if "QTD" in df_itens.columns else 0.0
 
-    # 4. Merge
-    cols_capa = [col_id_proc, "LOCAL_DESTINO", "NF", "VEICULO", "DATA_EMISSAO", "STATUS"]
+    # Trazemos mais dados do pai para o rastro (OC, MOTORISTA, STATUS_FISCAL)
+    cols_capa = [col_id_proc, "LOCAL_DESTINO", "NF", "VEICULO", "DATA_EMISSAO", "STATUS", "OC", "MOTORISTA", "STATUS_FISCAL"]
     cols_existentes = [c for c in cols_capa if c in df_processos.columns]
     
     df_full = pd.merge(df_itens, df_processos[cols_existentes], left_on=col_id_item, right_on=col_id_proc, how="inner")
     
-    # 5. LÓGICA DE DESTINO VAZIO (DARK DATA)
     if "LOCAL_DESTINO" in df_full.columns:
         df_full["LOCAL_DESTINO"] = df_full["LOCAL_DESTINO"].fillna("Sem Destino").replace("", "Sem Destino")
     
-    # 6. Tratamento de Data para Filtro
     if "DATA_EMISSAO" in df_full.columns:
         df_full["DT_OBJ"] = pd.to_datetime(df_full["DATA_EMISSAO"], dayfirst=True, errors='coerce')
     
     return df_full
 
 # ==============================================================================
-# 4. INTERFACE PRINCIPAL
+# 4. MODAL DE RASTRO (NOVIDADE)
 # ==============================================================================
-st.title("Controle de Estoque por Destino")
-st.markdown("Visão consolidada de produtos aguardando movimentação ou tratativa.")
+@st.dialog("🕵️ Rastro Detalhado do Item", width="large")
+def modal_rastro(item):
+    st.markdown(f"### {item.get('DESCRICAO', 'Item')}")
+    st.caption(f"Cód: {item.get('COD_ITEM', '-')}")
+    
+    st.divider()
+    
+    # Linha 1: Origem
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Processo ID", item.get('ID_PROCESSO', '-'))
+    c2.metric("Nota Fiscal", item.get('NF', '-'))
+    c3.metric("Ocorrência (OC)", item.get('OC', '-')) # Aqui está o que você queria!
+    
+    # Linha 2: Valores
+    c4, c5, c6 = st.columns(3)
+    val = float(item.get('VALOR_TOTAL_FLOAT', 0))
+    qtd = float(item.get('QTD_FLOAT', 0))
+    c4.metric("Valor Total", f"R$ {val:,.2f}")
+    c5.metric("Quantidade", f"{int(qtd)}")
+    c6.metric("Status Fiscal", item.get('STATUS_FISCAL', '-'))
+    
+    st.divider()
+    st.markdown("#### 🚚 Logística de Origem")
+    col_log1, col_log2, col_log3 = st.columns(3)
+    col_log1.text_input("Motorista", value=item.get('MOTORISTA', '-'), disabled=True)
+    col_log2.text_input("Veículo", value=item.get('VEICULO', '-'), disabled=True)
+    col_log3.text_input("Destino Atual", value=item.get('LOCAL_DESTINO', '-'), disabled=True)
+    
+    if st.button("Fechar Detalhes", use_container_width=True):
+        st.rerun()
 
-# Carga de Dados
+# ==============================================================================
+# 5. INTERFACE PRINCIPAL
+# ==============================================================================
+st.title("📦 Controle de Estoque por Destino")
+st.markdown("Visão consolidada. **Clique em um item na tabela para ver o rastro completo.**")
+
 try:
     df = carregar_dados_consolidados()
 except Exception as e:
-    st.error(f"Erro ao carregar dados: {e}")
+    st.error(f"Erro ao carregar: {e}")
     st.stop()
 
 if df.empty:
-    st.warning("📭 Nenhum dado encontrado. Verifique as planilhas.")
+    st.warning("📭 Nenhum dado encontrado.")
     st.stop()
 
-# --- ÁREA DE FILTROS & VISUALIZAÇÃO (EXPANDER) ---
+# --- FILTROS ---
 with st.expander("🔍 Filtros & Visualização", expanded=True):
     f1, f2, f3 = st.columns([1.5, 1.5, 2])
     
-    # A. Filtro de Data
-    dt_min = df["DT_OBJ"].min().date() if not df["DT_OBJ"].isna().all() else datetime.now().date()
-    dt_max = df["DT_OBJ"].max().date() if not df["DT_OBJ"].isna().all() else datetime.now().date()
+    dt_min = df["DT_OBJ"].min().date() if "DT_OBJ" in df and not df["DT_OBJ"].isna().all() else datetime.now().date()
+    dt_max = df["DT_OBJ"].max().date() if "DT_OBJ" in df and not df["DT_OBJ"].isna().all() else datetime.now().date()
     
-    with f1:
-        datas_sel = st.date_input("Período de Emissão", value=(dt_min, dt_max), format="DD/MM/YYYY")
-
-    # B. Filtro de Destino (Multiselect)
+    with f1: datas_sel = st.date_input("Período", value=(dt_min, dt_max), format="DD/MM/YYYY")
     with f2:
-        destinos_unicos = sorted(df["LOCAL_DESTINO"].unique())
-        # Tenta selecionar "Sem Destino" por padrão se existir, pra chamar atenção
-        padrao = ["Sem Destino"] if "Sem Destino" in destinos_unicos else []
-        destinos_sel = st.multiselect("Locais de Destino", options=destinos_unicos, default=None, placeholder="Todos os destinos")
+        destinos = sorted(df["LOCAL_DESTINO"].unique())
+        destinos_sel = st.multiselect("Locais", options=destinos, placeholder="Todos")
+    with f3: search_term = st.text_input("Buscar Geral", placeholder="NF, Item, ID, OC...")
 
-    # C. Busca Lambda (Global)
-    with f3:
-        search_term = st.text_input("Buscar Geral (NF, Item, Código, ID...)", placeholder="Digite para filtrar...")
-
-# --- APLICAÇÃO DOS FILTROS (ENGINE) ---
+# --- ENGINE ---
 df_filt = df.copy()
 
-# 1. Filtro Data
 if isinstance(datas_sel, tuple) and len(datas_sel) == 2:
-    start_d, end_d = datas_sel
-    # Filtra onde a data não é NaT e está no range
-    mask_data = (df_filt["DT_OBJ"].dt.date >= start_d) & (df_filt["DT_OBJ"].dt.date <= end_d)
-    df_filt = df_filt[mask_data]
+    start, end = datas_sel
+    if "DT_OBJ" in df_filt.columns:
+        df_filt = df_filt[(df_filt["DT_OBJ"].dt.date >= start) & (df_filt["DT_OBJ"].dt.date <= end)]
 
-# 2. Filtro Destino
 if destinos_sel:
     df_filt = df_filt[df_filt["LOCAL_DESTINO"].isin(destinos_sel)]
 
-# 3. Filtro Busca Lambda (O Poderoso)
 if search_term:
     t = search_term.lower()
-    # Cria uma máscara booleana varrendo várias colunas como string
-    mask_search = (
+    mask = (
         df_filt["DESCRICAO"].astype(str).str.lower().str.contains(t) |
         df_filt["NF"].astype(str).str.lower().str.contains(t) |
         df_filt["COD_ITEM"].astype(str).str.lower().str.contains(t) |
         df_filt["ID_PROCESSO"].astype(str).str.lower().str.contains(t) |
-        df_filt["VEICULO"].astype(str).str.lower().str.contains(t)
+        df_filt["OC"].astype(str).str.lower().str.contains(t) # Adicionado busca por OC
     )
-    df_filt = df_filt[mask_search]
+    df_filt = df_filt[mask]
 
 st.divider()
 
-# --- RESULTADOS APÓS FILTRO ---
 if df_filt.empty:
-    st.info("🔎 Nenhum registro encontrado com esses filtros.")
+    st.info("🔎 Nada encontrado.")
 else:
-    # --- KPIs ---
+    # KPIs
     k1, k2, k3, k4 = st.columns(4)
-    
     qtd_total = df_filt["QTD_FLOAT"].sum()
     valor_total = df_filt["VALOR_TOTAL_FLOAT"].sum()
-    nfs_unicas = df_filt["NF"].nunique()
+    sem_dest = len(df_filt[df_filt["LOCAL_DESTINO"] == "Sem Destino"])
     
-    # Contagem de Itens Sem Destino (Crítico)
-    sem_destino_count = len(df_filt[df_filt["LOCAL_DESTINO"] == "Sem Destino"])
-    delta_dest = f"{sem_destino_count} pendentes" if sem_destino_count > 0 else "Tudo alocado"
-    cor_delta = "inverse" if sem_destino_count > 0 else "off"
-
     k1.metric("📦 Volume (Qtd)", f"{int(qtd_total)}")
     k2.metric("💰 Valor Mercadoria", f"R$ {valor_total:,.2f}")
-    k3.metric("📄 NFs Envolvidas", f"{nfs_unicas}")
-    k4.metric("📍 Sem Destino", sem_destino_count, delta=delta_dest, delta_color=cor_delta)
+    k3.metric("📄 NFs", f"{df_filt['NF'].nunique()}")
+    k4.metric("📍 Sem Destino", sem_dest, delta="Atenção" if sem_dest > 0 else "OK", delta_color="inverse")
 
     st.write("")
     
-    # --- GRÁFICO E TABELA ---
     c_graf, c_tab = st.columns([1, 1.5])
     
     with c_graf:
-        st.subheader("🔥 Top Valor em Estoque")
-        
-        # Agrupamento Inteligente
-        df_tier = df_filt.groupby(["DESCRICAO", "LOCAL_DESTINO"])["VALOR_TOTAL_FLOAT"].sum().reset_index()
-        df_tier = df_tier.sort_values(by="VALOR_TOTAL_FLOAT", ascending=False).head(10)
-        
-        # Gráfico dinâmico
-        fig = px.bar(
-            df_tier, 
-            x="VALOR_TOTAL_FLOAT", 
-            y="DESCRICAO", 
-            orientation='h',
-            text_auto='.2s',
-            color="LOCAL_DESTINO", # Pinta por destino pra facilitar visualização
-            title="Top 10 Itens (R$)",
-            height=400
-        )
-        fig.update_layout(
-            yaxis={'categoryorder':'total ascending'}, 
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-        )
+        st.subheader("🔥 Top Valor")
+        df_tier = df_filt.groupby(["DESCRICAO", "LOCAL_DESTINO"])["VALOR_TOTAL_FLOAT"].sum().reset_index().sort_values("VALOR_TOTAL_FLOAT", ascending=False).head(10)
+        fig = px.bar(df_tier, x="VALOR_TOTAL_FLOAT", y="DESCRICAO", orientation='h', text_auto='.2s', color="LOCAL_DESTINO", title="Top 10 Itens (R$)")
+        fig.update_layout(yaxis={'categoryorder':'total ascending'}, legend=dict(orientation="h", y=1.02))
         st.plotly_chart(fig, use_container_width=True)
 
     with c_tab:
-        st.subheader(f"📋 Detalhes ({len(df_filt)} itens)")
+        st.subheader(f"📋 Lista ({len(df_filt)} itens)")
+        st.caption("👆 Clique na linha para ver o rastro (OC, Motorista, Origem)")
         
-        # Colunas prioritárias
-        cols_view = ["ID_PROCESSO", "NF", "COD_ITEM", "DESCRICAO", "QTD", "VALOR_TOTAL", "LOCAL_DESTINO", "DATA_EMISSAO"]
+        # Colunas Visíveis
+        cols_view = ["ID_PROCESSO", "OC", "NF", "DESCRICAO", "QTD", "VALOR_TOTAL", "LOCAL_DESTINO"]
         cols_final = [c for c in cols_view if c in df_filt.columns]
         
-        st.dataframe(
-            df_filt[cols_final], 
-            use_container_width=True, 
+        # Reset index é vital para a seleção funcionar certo após filtro
+        df_display = df_filt.reset_index(drop=True)
+        
+        # TABELA COM EVENTO DE SELEÇÃO
+        event = st.dataframe(
+            df_display[cols_final],
+            use_container_width=True,
             hide_index=True,
-            height=400
+            height=400,
+            on_select="rerun", # A Mágica acontece aqui
+            selection_mode="single-row"
         )
+        
+        # LÓGICA DO CLIQUE
+        if event.selection.rows:
+            idx = event.selection.rows[0] # Pega o índice clicado
+            item_selecionado = df_display.iloc[idx] # Pega os dados completos da linha (mesmo colunas ocultas)
+            modal_rastro(item_selecionado) # Abre o modal
