@@ -659,81 +659,116 @@ if tipo_visualizacao == "Lista":
                                     st.error("Erro ao excluir.")
 
 # =================================================================================
-# MODO KANBAN (MANTER O ORIGINAL)
+# MODO KANBAN (VISUAL PAGE 1 - DADOS PAGE 3)
 # =================================================================================
 elif tipo_visualizacao == "Kanban":
-
+    st.write("") # Espaçamento superior
+    
     fluxo = ["ABERTO", "EM ANÁLISE", "EM TRÂNSITO", "CONCLUÍDO"]
-    cores_border = {"ABERTO": "#FF4B4B", "EM ANÁLISE": "#FFA500", "EM TRÂNSITO": "#29B5E8", "CONCLUÍDO": "#00C853"}
+    # Cores vibrantes para os headers (Estilo Page 1)
+    cores_coluna = {"ABERTO": "#FF4B4B", "EM ANÁLISE": "#FFA726", "EM TRÂNSITO": "#29B5E8", "CONCLUÍDO": "#00C853"}
     
     cols = st.columns(4)
     
     for i, status in enumerate(fluxo):
         with cols[i]:
-            # Cabeçalho
-            cor = cores_border[status]
-            st.markdown(f"""<div style="border-bottom: 2px solid {cor}; padding-bottom: 5px; margin-bottom: 15px; font-weight: 700; color: #BBB; font-size: 13px; text-transform: uppercase;">{status}</div>""", unsafe_allow_html=True)
+            # --- HEADER DA COLUNA (Estilo Page 1) ---
+            cor = cores_coluna[status]
+            st.markdown(f"<div class='k-column-header' style='border-color: {cor}; color: {cor};'>{status}</div>", unsafe_allow_html=True)
             
+            # Filtra itens do status atual
             itens = df_view[df_view['STATUS'] == status]
-            if itens.empty: 
-                st.markdown(f"<div style='color: #444; font-size: 11px; text-align: center; margin-top: 20px;'>— Vazio —</div>", unsafe_allow_html=True)
             
+            if itens.empty: 
+                st.markdown("<div style='text-align: center; opacity: 0.5; font-size: 12px; margin-top: 10px;'>— Vazio —</div>", unsafe_allow_html=True)
+            
+            # --- LOOP DOS CARDS ---
             for _, row in itens.iterrows():
                 id_proc = row['ID_PROCESSO']
                 
-                # Dados
+                # 1. Preparação de Dados (Mantendo lógica original da Page 3)
                 st_fiscal = row.get('STATUS_FISCAL', 'PENDENTE')
-                cor_fisc = "#00C853" if "APROVADO" in st_fiscal else "#FF4B4B" if "REJEITADO" in st_fiscal else "#FFA500" if "AGUARDANDO" in st_fiscal else "#FFD700"
-                cor_txt_fisc = "#000" if st_fiscal == "PENDENTE" else "#FFF"
+                
+                # Cores Fiscal (Mapeamento visual Page 1)
+                if "APROVADO" in st_fiscal:
+                    bg_fisc, fg_fisc = "#e8f5e9", "#2e7d32"
+                elif "REJEITADO" in st_fiscal:
+                    bg_fisc, fg_fisc = "#ffebee", "#c62828"
+                elif "AGUARDANDO" in st_fiscal:
+                    bg_fisc, fg_fisc = "#fff3e0", "#ef6c00"
+                else:
+                    bg_fisc, fg_fisc = "#f5f5f5", "#616161"
+
+                # Dados de Texto
+                nf_val = row.get('NF', '-')
+                resp_val = str(row.get('RESPONSAVEL', 'System')).split(' ')[0].title()
                 
                 veic = str(row.get('VEICULO', '') or '?')
-                mot = str(row.get('MOTORISTA', '') or '?')
-                loc_atual = str(row.get('LOCAL_ATUAL', '...') or '...')
-                loc_dest = str(row.get('LOCAL_DESTINO', '?') or '?')
+                mot = str(row.get('MOTORISTA', '') or '?').split(' ')[0].title()
                 
-                # HTML CLEAN
-                html_card = f"""
-                    <div class="k-card-header">
-                        <span class="k-id">{id_proc}</span>
-                        <span class="k-fiscal-badge" style="background-color: {cor_fisc}; color: {cor_txt_fisc}">{st_fiscal}</span>
-                    </div>
-                    <div class="k-row"><span class="k-label">NF</span> <span class="k-value">{row.get('NF', '-')}</span></div>
-                    <div class="k-row"><span class="k-label">Resp</span> <span class="k-value">{str(row.get('RESPONSAVEL', 'System')).split(' ')[0].title()}</span></div>
-                """
+                # Tratamento de Locais
+                loc_origem = str(row.get('LOCAL', 'Origem'))
+                loc_atual = str(row.get('LOCAL_ATUAL', '...'))
+                loc_dest = str(row.get('LOCAL_DESTINO', 'Destino'))
                 
-                # Rota Clean com Destaque
-                if loc_atual != '...' and loc_atual != '':
-                    html_card += f"""
-                    <div class="k-rota-container">
-                        <div class="k-transport-highlight">{veic} • {mot}</div>
-                            <div class="k-rota-path">
-                            <div style="font-size:11px; color:#AAA;">
-                            <span>{row.get('LOCAL', '?')}</span>
-                            <span class="k-seta" style="color:red; font-size:11px;">→</span>
-                            <span class="k-current" style="font-size:11px; font-weight:bold; color:#29B5E8;">{loc_atual}</span>
-                            <span class="k-seta" style="color:red; font-size:11px;">→</span>
-                            <span>{loc_dest}</span>
-                        </div>
-                        </div>
-                    </div>
-                    """
+                # Monta string transporte
+                info_transporte = f"{veic} • {mot}" if (veic != '?' and mot != '?') else mot if mot != '?' else "Transporte n/d"
+
+                # 2. HTML da Rota (Híbrido: Visual Page 1 + Dados Page 3)
+                div_rota = ""
+                # Se tivermos dados de local atual, mostramos o box cinza
+                if loc_atual not in ['...', ''] or loc_dest != '?':
+                    div_rota = (
+                        f'<div class="k-rota-box">'
+                        f'  <div class="k-rota-title">🚛 {info_transporte}</div>'
+                        f'  <div class="k-rota-flow">'
+                        # Aqui mantivemos a lógica visual simples (Atual -> Destino) para não quebrar o layout,
+                        # mas você pode adicionar a Origem se quiser. O visual Clean da Page 1 prefere 2 pontos.
+                        f'      <span title="Origem: {loc_origem}">{loc_atual}</span>' 
+                        f'      <span style="color:#FF4B4B; font-weight:bold;">➝</span>' 
+                        f'      <span>{loc_dest}</span>'
+                        f'  </div>'
+                        f'</div>'
+                    )
+
+                # 3. HTML DO CARD COMPLETO (Sintaxe Segura)
+                html_card = (
+                    f'<div class="kanban-card">'
+                    f'  <div class="k-card-header">'
+                    f'      <span class="k-id">{id_proc}</span>'
+                    f'      <span class="k-fiscal-badge" style="background-color: {bg_fisc}; color: {fg_fisc}; border: 1px solid {fg_fisc}40;">{st_fiscal}</span>'
+                    f'  </div>'
+                    f'  <div class="k-body">'
+                    f'      <div class="k-row"><span class="k-icon">📄</span><strong>{nf_val}</strong></div>'
+                    f'      <div class="k-row"><span class="k-icon">👤</span><span>{resp_val}</span></div>'
+                    f'      {div_rota}'
+                    f'  </div>'
+                    # Adicionei a data de criação no rodapé se existir, pra dar o toque final
+                    f'  <div class="k-time" style="margin-top:5px;">📅 {row.get("DATA_CRIACAO", "")}</div>'
+                    f'</div>'
+                )
                 
-                with st.container(border=True):
-                    st.markdown(html_card, unsafe_allow_html=True)
-                    
-                    st.write("")
-                    b1, b2, b3 = st.columns([1, 4, 1])
-                    
-                    # Botões Limpos
-                    if i > 0:
-                        if b1.button("←", key=f"prev_{id_proc}", help=f"Mover para {fluxo[i-1]}"):
-                            atualizar_status_devolucao(id_proc, fluxo[i-1])
-                            st.rerun()
-                    
-                    if b2.button("Detalhes", key=f"det_{id_proc}", use_container_width=True):
-                        modal_detalhes_completo(id_proc, row, st.session_state.get('usuario', 'Anon'))
-                    
-                    if i < len(fluxo) - 1:
-                        if b3.button("→", key=f"next_{id_proc}", help=f"Mover para {fluxo[i+1]}"):
-                            atualizar_status_devolucao(id_proc, fluxo[i+1])
-                            st.rerun()
+                # Renderiza o Card
+                st.markdown(html_card, unsafe_allow_html=True)
+                
+                # 4. BOTÕES DE AÇÃO (Layout 1-4-1 igual Page 1)
+                # O container border=True foi removido em favor do layout limpo
+                b1, b2, b3 = st.columns([1, 4, 1])
+                
+                # Botão Voltar
+                if i > 0:
+                    if b1.button("◀", key=f"p3_prev_{id_proc}", help=f"Voltar para {fluxo[i-1]}"):
+                        atualizar_status_devolucao(id_proc, fluxo[i-1])
+                        st.rerun()
+                
+                # Botão Detalhes (Expandido)
+                if b2.button("Detalhes", key=f"p3_det_{id_proc}", use_container_width=True):
+                    modal_detalhes_completo(id_proc, row, st.session_state.get('usuario', 'Anon'))
+                
+                # Botão Avançar
+                if i < len(fluxo) - 1:
+                    if b3.button("▶", key=f"p3_next_{id_proc}", help=f"Avançar para {fluxo[i+1]}"):
+                        atualizar_status_devolucao(id_proc, fluxo[i+1])
+                        st.rerun()
+                
+                st.write("") # Espaço entre cards
