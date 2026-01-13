@@ -421,21 +421,26 @@ if not df_filtered.empty:
     </style>
     """, unsafe_allow_html=True)
 
-    total = len(df_filtered)
-    abertos = len(df_filtered[df_filtered['STATUS'] == 'ABERTO'])
-    concluidos = len(df_filtered[df_filtered['STATUS'] == 'CONCLUÍDO'])
-    # Lógica de contagem corrigida (Regex para pegar variações)
-    pend_fisc = len(df_filtered[df_filtered['STATUS_FISCAL'].astype(str).str.contains('PENDENTE|AGUARDANDO|EM ANÁLISE', regex=True, na=False)])
+total = len(df_filtered)
+abertos = len(df_filtered[df_filtered['STATUS'] == 'ABERTO'])
+concluidos = len(df_filtered[df_filtered['STATUS'] == 'CONCLUÍDO'])
+# Correção do Fiscal aqui:
+pend_fisc = len(df_filtered[df_filtered['STATUS_FISCAL'].astype(str).str.upper().str.contains('PENDENTE|AGUARDANDO|EM ANÁLISE', regex=True, na=False)])
 
-    c1, c2, c3, c4 = st.columns(4)
-    with c1: st.markdown(card_html("Total de Processos", f"{total}", "border-white"), unsafe_allow_html=True)
-    with c2: 
-        sub = f"<div class='kpi-sub'>🔥 {abertos} precisam de atenção</div>" if abertos > 0 else ""
-        st.markdown(card_html("Em Aberto", f"{abertos}", "border-red", sub), unsafe_allow_html=True)
-    with c3: st.markdown(card_html("Concluídos", f"{concluidos}", "border-green"), unsafe_allow_html=True)
-    with c4: 
-        sub_fisc = f"<div class='kpi-sub'>⚠️ {pend_fisc} notas travadas</div>" if pend_fisc > 0 else "<div style='color:#2ecc71; font-size:11px; margin-top:8px;'>Tudo Ok!</div>"
-        st.markdown(card_html("Pend. Fiscal", f"{pend_fisc}", "border-orange", sub_fisc), unsafe_allow_html=True)
+# Renderização dos Cards
+c1, c2, c3, c4 = st.columns(4)
+
+with c1:
+    st.markdown(card_html("Total de Processos", f"{total}", "border-white"), unsafe_allow_html=True)
+
+with c2:
+    st.markdown(card_html("Em Aberto", f"{abertos}", "border-red"), unsafe_allow_html=True)
+
+with c3:
+    st.markdown(card_html("Concluídos", f"{concluidos}", "border-green"), unsafe_allow_html=True)
+
+with c4:
+    st.markdown(card_html("Pend. Fiscal", f"{pend_fisc}", "border-orange"), unsafe_allow_html=True)
 
 st.write("")
 
