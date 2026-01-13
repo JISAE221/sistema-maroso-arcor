@@ -1,96 +1,148 @@
 import streamlit as st
 import pandas as pd
+import uuid
 import time
-from datetime import datetime, timedelta
-from services.conexao_sheets import (
-    carregar_dados, 
-    carregar_mensagens, 
-    salvar_mensagem, 
-    excluir_processo_completo,
-    carregar_itens_por_processo, 
-    atualizar_status_devolucao,
-    atualizar_tratativa_completa
-)
-from services.upload_service import upload_bytes_cloudinary
+import re # Importante para limpar o texto da moeda
+from datetime import datetime, date, timedelta
+from pathlib import Path
 
-# ==============================================================================
-# 0. PROTEÇÃO DE ACESSO
-# ==============================================================================
+# Proteção de acesso
 if "logado" not in st.session_state or not st.session_state["logado"]:
     st.switch_page("app.py")
 
 # ==============================================================================
-# 1. CONFIGURAÇÃO E CSS (O NOVO PADRÃO DARK/EXECUTIVE)
+# FUNÇÕES AUXILIARES MATEMÁTICAS - CORREÇÃO PRINCIPAL
 # ==============================================================================
-st.set_page_config(page_title="Gestão de Tratativas", page_icon="📋", layout="wide")
 
+def converter_br_para_float(valor):
+    """
+    Transforma strings sujas ('R$ 1.000,50') em float puro (1000.50).
+    Evita a concatenação de texto.
+    """
+    if pd.isna(valor) or valor is None:
+        return 0.0
+    
+    s = str(valor).strip()
+    
+    # Se já é vazio, retorna 0
+    if s == "" or s.lower() == "nan" or s.lower() == "none":
+        return 0.0
+    
+    # Remove R$, espaços
+    s = re.sub(r'R\$', '', s)
+    s = re.sub(r'\s+', '', s)
+    
+    # Remove pontos de milhar (1.000 -> 1000)
+    s = re.sub(r'\.(?=\d{3})', '', s)
+    
+    # Troca vírgula decimal por ponto (50,00 -> 50.00)
+    s = s.replace(',', '.')
+    
+    try:
+        return float(s)
+    except ValueError:
+        # Se ainda falhar, tenta extrair apenas números e ponto
+        numeros = re.findall(r'[\d.]+', s)
+        if numeros:
+            try:
+                return float(numeros[0])
+            except:
+                return 0.0
+        return 0.0
+
+def formatar_moeda(valor):
+    """Transforma float em string bonita (R$ 1.000,00)"""
+    try:
+        # PRIMEIRO converte para float
+        val_float = converter_br_para_float(valor)
+        # DEPOIS formata
+        return f"R$ {val_float:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    except:
+        return "R$ 0,00"
+
+def calcular_total_processo(id_proc):
+    """
+    Retorna o valor total somado (float) e a string formatada.
+    """
+    df_itens = carregar_itens_por_processo(id_proc)
+    if df_itens.empty:
+        return 0.0, "R$ 0,00"
+    
+    total = 0.0
+    
+    # Verifica qual coluna usar
+    if "VALOR_TOTAL" in df_itens.columns:
+        coluna_valor = "VALOR_TOTAL"
+    elif "TOTAL" in df_itens.columns:
+        coluna_valor = "TOTAL"
+    elif "VALOR" in df_itens.columns:
+        coluna_valor = "VALOR"
+    else:
+        # Tenta calcular QTD * VALOR_UNIT se disponível
+        if "QTD" in df_itens.columns and "VALOR_UNIT" in df_itens.columns:
+            df_itens["VALOR_CALCULADO"] = df_itens.apply(
+                lambda row: converter_br_para_float(row.get("QTD", 0)) * 
+                           converter_br_para_float(row.get("VALOR_UNIT", 0)), 
+                axis=1
+            )
+            coluna_valor = "VALOR_CALCULADO"
+        else:
+            return 0.0, "R$ 0,00"
+    
+    # Aplica conversão e soma
+    total = df_itens[coluna_valor].apply(converter_br_para_float).sum()
+    
+    # Formata o resultado
+    total_fmt = f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    
+    return total, total_fmt
+
+# ==============================================================================
+# CSS: ESTILOS VISUAIS
+# ==============================================================================
 st.markdown("""
 <style>
-    /* Esconde Nav Nativa */
     [data-testid="stSidebarNav"] {display: none;}
-    
-    /* --- CSS DOS CARDS (PADRÃO PAGE 5) --- */
-    .kpi-card {
-        background-color: #262730;
-        border-radius: 4px;
-        padding: 15px 20px;
-        margin-bottom: 20px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        border: 1px solid rgba(255,255,255,0.05);
+    section[data-testid="stSidebar"] > div {
+        height: 100vh; display: flex; flex-direction: column; justify-content: space-between;
+        padding-top: 0px !important; padding-bottom: 20px !important;
     }
-    .kpi-label {
-        font-size: 11px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        color: #a0a0a0;
-        margin-bottom: 5px;
+    div[data-testid="stSidebarUserContent"] {
+        padding-top: 2rem !important; display: flex; flex-direction: column; height: 100%;
     }
-    .kpi-value {
-        font-size: 28px;
-        font-weight: 700;
-        color: #ffffff;
-        line-height: 1.2;
-    }
-    .kpi-sub {
-        font-size: 12px;
-        margin-top: 5px;
-        color: #e74c3c; /* Vermelho alerta */
-    }
-    
-    /* Bordas Coloridas */
-    .border-white  { border-left: 5px solid #e0e0e0; } /* Total */
-    .border-red    { border-left: 5px solid #e74c3c; } /* Aberto */
-    .border-green  { border-left: 5px solid #2ecc71; } /* Concluído */
-    .border-orange { border-left: 5px solid #f39c12; } /* Fiscal/Atenção */
-
-    /* Expander e Inputs */
-    .stExpander {border: 1px solid rgba(128, 128, 128, 0.2); border-radius: 8px; background-color: #1E1E1E;}
-    
-    /* Sidebar */
-    section[data-testid="stSidebar"] > div {height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding-top: 0px !important; padding-bottom: 20px !important;}
-    div[data-testid="stSidebarUserContent"] {padding-top: 2rem !important; display: flex; flex-direction: column; height: 100%;}
-    div[data-testid="stImage"] { margin-bottom: 20px; }
     .footer-container { margin-top: auto; }
     
-    /* Chat e Tabela */
-    .chat-meta { font-size: 0.75rem; color: #888; margin-bottom: 2px; }
-    .chat-user { font-weight: bold; color: #FF4B4B; margin-right: 5px; }
     .btn-ghost {
         display: inline-flex; align-items: center; background-color: transparent !important;
         border: 1px solid #FF4B4B !important; color: #FF4B4B !important;
         padding: 4px 12px; border-radius: 4px; text-decoration: none;
         font-size: 14px; font-weight: 500; transition: all 0.2s;
     }
+    .chat-meta { font-size: 0.75rem; color: #888; margin-bottom: 2px; }
+    .chat-user { font-weight: bold; color: #FF4B4B; margin-right: 5px; }
+    
+    /* Badge Total Valor (Estilo do Botão Verde) */
+    .badge-total {
+        background-color: rgba(0, 200, 83, 0.15); 
+        color: #00C853; 
+        padding: 4px 10px; 
+        border-radius: 6px; 
+        border: 1px solid #00C853; 
+        font-weight: bold; 
+        font-size: 13px;
+        white-space: nowrap;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. SIDEBAR
+# SIDEBAR
 # ==============================================================================
 with st.sidebar:
-    try: st.image("assets/logo.png", use_container_width=True)
-    except: st.header("MAROSO")
+    try:
+        st.image("assets/logo.png", use_container_width=True)
+    except:
+        st.header("MAROSO")
 
     st.write("") 
     st.caption("MENU PRINCIPAL")
@@ -114,159 +166,297 @@ with st.sidebar:
     if st.button("Sair", use_container_width=True):
         st.session_state["logado"] = False
         st.switch_page("app.py")
+
     st.markdown('</div>', unsafe_allow_html=True)
 
-# ==============================================================================
-# 3. FUNÇÕES DE SUPORTE
-# ==============================================================================
-def card_html(label, value, border_class, sub_html=""):
-    """Gera o HTML do Card Estilo Page 5"""
-    return f"""
-    <div class="kpi-card {border_class}">
-        <div class="kpi-label">{label}</div>
-        <div class="kpi-value">{value}</div>
-        {sub_html}
-    </div>
-    """
+# Importa as funções do Backend
+from services.conexao_sheets import (
+    carregar_dados, 
+    carregar_mensagens, 
+    salvar_mensagem, 
+    excluir_processo_completo,
+    carregar_itens_por_processo, 
+    atualizar_status_devolucao,
+    atualizar_tratativa_completa
+)
+from services.upload_service import upload_bytes_cloudinary 
 
-def converter_br_para_float(valor):
-    if pd.isna(valor) or valor is None: return 0.0
-    s = str(valor).strip()
-    if s == "" or s.lower() == "nan": return 0.0
-    s = s.replace('R$', '').replace(' ', '').replace('.', '').replace(',', '.')
-    try: return float(s)
-    except: return 0.0
-
-def calcular_total_processo(id_proc):
-    df_itens = carregar_itens_por_processo(id_proc)
-    if df_itens.empty: return 0.0, "R$ 0,00"
-    
-    coluna_valor = "VALOR_TOTAL" if "VALOR_TOTAL" in df_itens.columns else "VALOR" if "VALOR" in df_itens.columns else None
-    
-    total = 0.0
-    if coluna_valor:
-        total = df_itens[coluna_valor].apply(converter_br_para_float).sum()
-    elif "QTD" in df_itens.columns and "VALOR_UNIT" in df_itens.columns:
-        total = (df_itens["QTD"].apply(converter_br_para_float) * df_itens["VALOR_UNIT"].apply(converter_br_para_float)).sum()
-        
-    total_fmt = f"R$ {total:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-    return total, total_fmt
-
-# ==============================================================================
-# 4. CARGA DE DADOS
-# ==============================================================================
-df = carregar_dados("REGISTRO_DEVOLUCOES")
-
-# Tratamento Inicial
-if not df.empty:
-    df.columns = df.columns.str.strip().str.upper()
-    
-    # Cria Objeto de Data
-    if 'DATA_CRIACAO' in df.columns:
-        df['DATA_OBJ'] = pd.to_datetime(df['DATA_CRIACAO'], dayfirst=True, errors='coerce')
-    else:
-        df['DATA_OBJ'] = pd.NaT
-
-    # --- CORREÇÃO DO BUG FISCAL (SANITIZAÇÃO) ---
-    if 'STATUS_FISCAL' in df.columns:
-        # Converte para string, maiúsculo e remove espaços nas pontas
-        df['STATUS_FISCAL'] = df['STATUS_FISCAL'].fillna("PENDENTE").astype(str).str.upper().str.strip()
-    else:
-        df['STATUS_FISCAL'] = "PENDENTE"
-        
-    if 'STATUS' not in df.columns: df['STATUS'] = "ABERTO"
-
-# ==============================================================================
-# 5. INTERFACE PRINCIPAL
-# ==============================================================================
 st.title("Gestão de Tratativas")
 
-# --- FILTROS (TOP EXPANDER) ---
+def calcular_prazo_alerta(data_inicio_str, status_atual, data_fim_str=None):
+    try:
+        if not data_inicio_str or str(data_inicio_str).strip() in ["", "None", "NaT"]:
+            return "SEM DATA INÍCIO", "grey"
+        
+        dt_inicio = pd.to_datetime(data_inicio_str, dayfirst=True, errors='coerce').date()
+        if pd.isna(dt_inicio): return "DATA INVÁLIDA", "grey"
+
+        if status_atual == "CONCLUÍDO":
+            if data_fim_str and str(data_fim_str).strip() not in ["", "None"]:
+                dt_fim = pd.to_datetime(data_fim_str, dayfirst=True, errors='coerce').date()
+            else:
+                dt_fim = datetime.now().date()
+            texto_extra = " (Finalizado)"
+        else:
+            dt_fim = datetime.now().date()
+            texto_extra = ""
+
+        dias_corridos = (dt_fim - dt_inicio).days
+        
+        if dias_corridos < 3: return f"FRESCO ({dias_corridos} dias){texto_extra}", "#00B17C"
+        elif dias_corridos < 5: return f"ATENÇÃO ({dias_corridos} dias){texto_extra}", "#5173C2"
+        elif dias_corridos < 10: return f"PRAZO 10 ({dias_corridos} dias){texto_extra}", "#EC9E55"
+        elif dias_corridos < 20: return f"PRAZO 20 ({dias_corridos} dias){texto_extra}", "#E9EB7B"
+        else: return f"ESTOUROU ({dias_corridos} dias){texto_extra}", "#FF4B4B"
+    except:
+        return f"ERRO CÁLCULO", "grey"
+
+def renderizar_chat_visual(df_msgs):
+    if df_msgs.empty:
+        st.caption("💬 Nenhum comentário ainda.")
+        return
+
+    for _, msg in df_msgs.iterrows():
+        is_me = msg.get('USUARIO') == st.session_state.get('usuario')
+        nome_user = msg.get('USUARIO', 'Desconhecido')
+        hora = pd.to_datetime(msg.get('DATA_HORA')).strftime("%d/%m %H:%M")
+        texto = msg.get('MENSAGEM', '')
+        anexo = str(msg.get('ANEXO', ''))
+
+        with st.chat_message("user" if is_me else "assistant"):
+            st.markdown(f"<div class='chat-meta'><span class='chat-user'>{nome_user}</span> • {hora}</div>", unsafe_allow_html=True)
+            if texto: st.write(texto)
+            if anexo and anexo.startswith("http"):
+                ext = anexo.split('.')[-1].lower()
+                if ext in ['png', 'jpg', 'jpeg', 'gif']:
+                    st.image(anexo, width=200)
+                else:
+                    st.markdown(f"[Abrir Documento ({ext})]({anexo})")
+
+def limpar_cache(id_proc):
+    if id_proc in st.session_state.anexo_cache: del st.session_state.anexo_cache[id_proc]
+    st.session_state.reset_uploader += 1
+
+if 'anexo_cache' not in st.session_state: st.session_state.anexo_cache = {} 
+if 'reset_uploader' not in st.session_state: st.session_state.reset_uploader = 0 
+
+# --- MODAL DETALHES (CORRIGIDO E LIMPO) ---
+@st.dialog("Detalhes do Processo", width="large")
+def modal_detalhes_completo(id_proc, dados_row, usuario_atual):
+    # 1. Cabeçalho NFD
+    link_nfd = dados_row.get('LINK_NFD', '')
+    if link_nfd and str(link_nfd).startswith('http'):
+        st.info(f"**Documento NFD Disponível:** [Clique para Visualizar]({link_nfd})")
+    
+    # 2. Dados Chave
+    c1, c2, c3 = st.columns(3)
+    c1.markdown(f"**ID:** `{id_proc}`")
+    c2.markdown(f"**NF:** `{dados_row.get('NF', '-')}`")
+    c3.markdown(f"**Resp:** {dados_row.get('RESPONSAVEL', '-')}")
+    st.divider()
+    
+    # 3. TABELA DE ITENS COM TOTAL (CORRIGIDA)
+    _, total_fmt = calcular_total_processo(id_proc)
+    
+    c_tit, c_tot = st.columns([1, 1])
+    c_tit.caption("Itens da Devolução")
+    c_tot.markdown(f"""
+        <div style="text-align: right;">
+            <span class="badge-total">Total: {total_fmt}</span>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    df_itens = carregar_itens_por_processo(id_proc)
+    if not df_itens.empty:
+        df_show = df_itens.copy()
+        
+        # Formata Visualmente para a Tabela
+        if "VALOR_UNIT" in df_show.columns: 
+            df_show["VALOR_UNIT"] = df_show["VALOR_UNIT"].apply(formatar_moeda)
+        if "VALOR_TOTAL" in df_show.columns: 
+            df_show["VALOR_TOTAL"] = df_show["VALOR_TOTAL"].apply(formatar_moeda)
+        
+        cols_show = [c for c in ["COD_ITEM", "DESCRICAO", "QTD", "VALOR_UNIT", "VALOR_TOTAL"] if c in df_show.columns]
+        st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
+    else:
+        st.info("Nenhum item registrado.")
+        
+    st.divider()
+    
+    # 4. Chat
+    st.caption("Histórico & Evidências")
+    with st.container(height=400):
+        df_msgs = carregar_mensagens(id_proc)
+        renderizar_chat_visual(df_msgs)
+        
+    texto = st.chat_input("Adicionar observação...", key=f"modal_input_{id_proc}")
+    if texto:
+        salvar_mensagem(id_proc, usuario_atual, texto, "")
+        st.rerun()
+
+# --- CARREGAR DADOS ---
+df_proc = carregar_dados("REGISTRO_DEVOLUCOES")
+
+if not df_proc.empty:
+    # Padroniza colunas para maiúsculo e sem espaços
+    df_proc.columns = df_proc.columns.str.strip().str.upper()
+    
+    # === BLINDAGEM CONTRA ERRO DE COLUNA ===
+    # Verifica se STATUS existe. Se não existir, cria com valor padrão "ABERTO"
+    if "STATUS" not in df_proc.columns:
+        # Tenta procurar alguma coluna que contenha "SITUACAO" ou "ESTADO" caso tenha renomeado
+        st.warning("⚠️ Coluna 'STATUS' não encontrada na planilha. Usando padrão 'ABERTO' para evitar erro.")
+        df_proc["STATUS"] = "ABERTO"
+    
+    # Verifica STATUS_FISCAL
+    if "STATUS_FISCAL" not in df_proc.columns: 
+        df_proc["STATUS_FISCAL"] = "PENDENTE"
+        
+    # Verifica TIPO_CARGA (Nova coluna) - Garante que exista para não dar erro futuro
+    if "TIPO_CARGA" not in df_proc.columns:
+        df_proc["TIPO_CARGA"] = "DIRETA"
+    # =======================================
+
+    # Conversão de Data
+    df_proc['DATA_OBJ'] = pd.to_datetime(
+        df_proc['DATA_CRIACAO'], 
+        format='mixed', 
+        dayfirst=True, 
+        errors='coerce'
+    )
+
+# --- FILTROS ---
 hoje = datetime.now().date()
 inicio_padrao = hoje - timedelta(days=30)
+with st.expander("📅 Filtros & Visualização", expanded=True):
+    c_check, c_d1, c_d2, c_view = st.columns([1, 1, 1, 2])
+    usar_filtro_data = c_check.checkbox("Filtrar Período", value=True)
+    data_inicio = c_d1.date_input("De:", value=inicio_padrao, disabled=not usar_filtro_data)
+    data_fim = c_d2.date_input("Até:", value=hoje, disabled=not usar_filtro_data)
+    tipo_visualizacao = c_view.radio("Visualização:", ["Lista", "Kanban"], horizontal=True, label_visibility="collapsed")
 
-with st.expander("🗓️ Filtros & Visualização", expanded=True):
-    c1, c2, c3 = st.columns([1, 1, 1])
+if not df_proc.empty:
+    df_filtered = df_proc.copy()
+    if usar_filtro_data:
+        mask_data = (df_filtered['DATA_OBJ'].dt.date >= data_inicio) & (df_filtered['DATA_OBJ'].dt.date <= data_fim) & (df_filtered['DATA_OBJ'].notnull())
+        df_filtered = df_filtered[mask_data]
+else:
+    df_filtered = pd.DataFrame()
+
+st.divider()
+
+# --- KPI DASHBOARD (COM VISUAL PERSONALIZADO) ---
+if not df_filtered.empty:
     
-    with c1:
-        usar_filtro_data = st.checkbox("Filtrar Período", value=True)
-        
-    with c2:
-        if usar_filtro_data:
-            dt_min = df["DATA_OBJ"].min().date() if not df.empty and not df["DATA_OBJ"].isna().all() else inicio_padrao
-            datas_sel = st.date_input("Período", value=(dt_min, hoje), format="DD/MM/YYYY")
-        else:
-            datas_sel = None
+    # CSS com Variáveis do Streamlit (var(--...))
+    st.markdown("""
+    <style>
+        .kpi-card {
+            /* Fundo que se adapta ao tema (cinza claro no light, escuro no dark) */
+            background-color: var(--secondary-background-color); 
+            border-radius: 8px;
+            padding: 15px 20px;
+            border-left: 5px solid #888;
+            /* Sombra suave */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: left;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .kpi-label { 
+            font-size: 13px; 
+            /* Cor do texto principal, mas com opacidade para parecer "rótulo" */
+            color: var(--text-color); 
+            opacity: 0.7;
+            margin-bottom: 5px; 
+            text-transform: uppercase; 
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+        .kpi-val { 
+            font-size: 32px; 
+            font-weight: 700; 
+            /* Cor do texto principal (Preto ou Branco automático) */
+            color: var(--text-color); 
+            line-height: 1; 
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
-    # Filtro Modo de Visualização
-    with c3:
-        st.write("") # Espaço para alinhar
-        tipo_visualizacao = st.radio("Modo:", ["Lista", "Kanban"], horizontal=True, label_visibility="collapsed")
+    # Cálculo dos Números
+    total = len(df_filtered)
+    abertos = len(df_filtered[df_filtered['STATUS'] == 'ABERTO'])
+    concluidos = len(df_filtered[df_filtered['STATUS'] == 'CONCLUÍDO'])
+    pend_fisc = len(df_filtered[df_filtered['STATUS_FISCAL'].astype(str).str.contains('AGUARDANDO', na=False)])
 
-# --- APLICAÇÃO DOS FILTROS ---
-df_filt = df.copy()
-if not df.empty:
-    if usar_filtro_data and isinstance(datas_sel, tuple) and len(datas_sel) == 2:
-        start, end = datas_sel
-        if 'DATA_OBJ' in df_filt.columns:
-            df_filt = df_filt[(df_filt["DATA_OBJ"].dt.date >= start) & (df_filt["DATA_OBJ"].dt.date <= end)]
+    c1, c2, c3, c4 = st.columns(4)
 
-# --- CÁLCULO DE KPIS (AGORA FUNCIONA) ---
-total_proc = len(df_filt)
-em_aberto = len(df_filt[df_filt['STATUS'] == 'ABERTO'])
-concluidos = len(df_filt[df_filt['STATUS'] == 'CONCLUÍDO'])
+    # 1. TOTAL (Cinza Neutro)
+    c1.markdown(f"""
+    <div class="kpi-card" style="border-left-color: #6c757d;">
+        <div class="kpi-label">Total de Processos</div>
+        <div class="kpi-val">{total}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# Lógica Fiscal Corrigida: Busca PENDENTE ou AGUARDANDO (maiúsculo)
-pend_fiscal = len(df_filt[df_filt['STATUS_FISCAL'].isin(['PENDENTE', 'AGUARDANDO', 'EM ANÁLISE'])])
+    # 2. EM ABERTO (Vermelho)
+    c2.markdown(f"""
+    <div class="kpi-card" style="border-left-color: #FF4B4B;">
+        <div class="kpi-label">Em Aberto</div>
+        <div class="kpi-val">{abertos}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-# --- RENDERIZAÇÃO DOS CARDS (NOVO DESIGN) ---
-st.write("")
-k1, k2, k3, k4 = st.columns(4)
+    # 3. CONCLUÍDOS (Verde)
+    c3.markdown(f"""
+    <div class="kpi-card" style="border-left-color: #00C853;">
+        <div class="kpi-label">Concluídos</div>
+        <div class="kpi-val">{concluidos}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-with k1:
-    st.markdown(card_html("Total de Processos", f"{total_proc}", "border-white"), unsafe_allow_html=True)
+    # 4. PENDÊNCIA FISCAL (Laranja)
+    c4.markdown(f"""
+    <div class="kpi-card" style="border-left-color: #FFA726;">
+        <div class="kpi-label">Pend. Fiscal</div>
+        <div class="kpi-val">{pend_fisc}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
-with k2:
-    # Se tiver em aberto, destaca
-    sub = f"<div class='kpi-sub'>🔥 {em_aberto} precisam de atenção</div>" if em_aberto > 0 else ""
-    st.markdown(card_html("Em Aberto", f"{em_aberto}", "border-red", sub), unsafe_allow_html=True)
+    st.write("")
 
-with k3:
-    st.markdown(card_html("Concluídos", f"{concluidos}", "border-green"), unsafe_allow_html=True)
-
-with k4:
-    # Card Fiscal Corrigido
-    sub_fisc = f"<div class='kpi-sub'>⚠️ {pend_fiscal} notas travadas</div>" if pend_fiscal > 0 else "<div style='color:#2ecc71; font-size:12px; margin-top:5px;'>Tudo Ok!</div>"
-    st.markdown(card_html("Pend. Fiscal", f"{pend_fiscal}", "border-orange", sub_fisc), unsafe_allow_html=True)
-
-
-# --- ÁREA DE CONTEÚDO ---
-st.write("")
-
-# Filtros Secundários (Abaixo dos KPIs, igual Page 5)
-if not df_filt.empty:
+# --- BUSCA ---
+if not df_filtered.empty:
     col_f1, col_f2, col_f3 = st.columns(3)
-    filtro_status = col_f1.multiselect("Status Logístico", options=sorted(df_filt["STATUS"].unique()))
+    filtro_status = col_f1.multiselect("Status Logístico", options=df_filtered["STATUS"].unique())
+    # Mudei o label para refletir que busca TUDO
     filtro_nf = col_f2.text_input("Buscar Geral (NF, OC, Motorista, ID...)") 
-    filtro_statusfiscal = col_f3.multiselect("Status Fiscal", options=sorted(df_filt["STATUS_FISCAL"].unique()))
+    filtro_statusfiscal = col_f3.multiselect("Status Fiscal", options=df_filtered["STATUS_FISCAL"].unique())
 
-    df_view = df_filt.copy()
+    df_view = df_filtered.copy()
     
     # Filtros exatos (Dropdowns)
-    if filtro_status: df_view = df_view[df_view["STATUS"].isin(filtro_status)]
-    if filtro_statusfiscal: df_view = df_view[df_view["STATUS_FISCAL"].isin(filtro_statusfiscal)]
+    if filtro_status: 
+        df_view = df_view[df_view["STATUS"].isin(filtro_status)]
+    
+    if filtro_statusfiscal: 
+        df_view = df_view[df_view["STATUS_FISCAL"].isin(filtro_statusfiscal)]
     
     # Busca Textual Global
     if filtro_nf:
         termo = filtro_nf.upper().strip()
+        # Verifica se o termo existe em QUALQUER coluna da linha
         mask = df_view.astype(str).apply(lambda x: x.str.upper().str.contains(termo, na=False)).any(axis=1)
         df_view = df_view[mask]
+        
 else:
     df_view = pd.DataFrame()
 
-# --------------------------------------------------------------------------
-# MODO LISTA (EXPANDERS COM FORMULÁRIO)
-# --------------------------------------------------------------------------
+# =================================================================================
+# MODO LISTA (PRINCIPAL)
+# =================================================================================
 if tipo_visualizacao == "Lista":
     st.caption(f"📋 {len(df_view)} registros encontrados.")
     
@@ -278,85 +468,219 @@ if tipo_visualizacao == "Lista":
         status_log = row.get('STATUS', 'ABERTO')
         status_fisc = row.get('STATUS_FISCAL', 'PENDENTE')
         
-        # Cores para o título
-        cor_st = "green" if status_log == "CONCLUÍDO" else "blue" if status_log == "EM TRÂNSITO" else "red"
+        # Badges
+        if status_log == "ABERTO": badge_log = ":red-background[ABERTO]"
+        elif status_log == "CONCLUÍDO": badge_log = ":green-background[CONCLUÍDO]"
+        else: badge_log = f":orange-background[{status_log}]"
         
+        if status_fisc == "APROVADO": badge_fisc = ":green[APROVADO]"
+        elif status_fisc == "REJEITADO": badge_fisc = ":red[REJEITADO]"
+        elif "PENDENTE" in status_fisc: badge_fisc = ":orange[PENDENTE]"
+        else: badge_fisc = f":grey[{status_fisc}]"
+
         # ✅ CÁLCULO TOTAL CORRETO
         _, valor_total_str = calcular_total_processo(id_proc)
 
-        motivo_curto = str(row.get('MOTIVO', '') or row.get('NOTAS FISCAIS - MOTIVO', ''))[:60]
+        motivo_curto = str(row.get('MOTIVO', ''))[:60]
         
-        # TÍTULO COM O VALOR TOTAL E STATUS COLORIDO
-        titulo_card = f":{cor_st}-background[{status_log}] **{id_proc}** | NF: {row.get('NF', '?')} | {valor_total_str} | {motivo_curto}..."
+        # TÍTULO COM O VALOR TOTAL
+        titulo_card = f"{badge_log} **{id_proc}** | NF: {row.get('NF', '?')} | {valor_total_str} | {motivo_curto}..."
         
         with st.expander(titulo_card):
-            # --- FORMULÁRIO DE EDIÇÃO ---
-            with st.form(key=f"f_st_{id_proc}"):
-                c_s1, c_s2 = st.columns(2)
-                lst_log = ["ABERTO", "EM ANÁLISE", "EM TRÂNSITO", "CONCLUÍDO", "CANCELADO"]
-                i_log = lst_log.index(status_log) if status_log in lst_log else 0
-                n_log = c_s1.selectbox("Logística", lst_log, index=i_log)
-                
-                lst_fisc = ["PENDENTE", "APROVADO", "REJEITADO"]
-                i_fisc = lst_fisc.index(status_fisc) if status_fisc in lst_fisc else 0
-                n_fisc = c_s2.selectbox("Fiscal", lst_fisc, index=i_fisc)
-                
-                st.markdown("---")
-                c_t1, c_t2 = st.columns(2)
-                n_veiculo = c_t1.text_input("Veículo", value=str(row.get("VEICULO", "") or ""))
-                n_motorista = c_t2.text_input("Motorista", value=str(row.get("MOTORISTA", "") or ""))
-
-                c_loc1, c_loc2 = st.columns(2)
-                n_loc_atual = c_loc1.text_input("Local Atual", value=str(row.get("LOCAL_ATUAL", "") or ""))
-                n_loc_dest = c_loc2.text_input("Destino", value=str(row.get("LOCAL_DESTINO", "") or ""))
-
-                st.markdown("---")
-                c_oc_edit = st.columns([1])[0]
-                val_oc_atual = str(row.get('OC', ''))
-                if val_oc_atual == "None": val_oc_atual = ""
-                n_oc = c_oc_edit.text_input("Nº Ocorrência (OC)", value=val_oc_atual)
-
-                # Botão Salvar dentro do Form
-                if st.form_submit_button("💾 Salvar Alterações", type="primary"):
-                    with st.spinner("Atualizando..."):
-                        # Chama função de update do backend (usa valores atuais para campos não editados aqui)
-                        atualizar_status_devolucao(id_proc, n_log) # Atualiza status simples primeiro
-                        # Aqui você poderia chamar atualizar_tratativa_completa se quiser editar tudo
-                        # Para simplificar, focamos no status e dados principais
-                        # (A implementação completa requer passar todos os campos para a função atualizar_tratativa_completa)
-                        pass 
-                        # Nota: A função atualizar_tratativa_completa precisa receber todos os argumentos.
-                        # Vou colocar a chamada completa para garantir que salve tudo.
-                        atualizar_tratativa_completa(
-                            id_proc, n_log, n_fisc, 
-                            str(row.get('COD_COB', '')), # Mantém original se não editar
-                            "", "", # Links vazios pois não fez upload aqui
-                            str(row.get('COD_CTE', '')),
-                            n_veiculo, n_motorista, n_loc_atual, n_loc_dest,
-                            n_oc, 
-                            None, None, # Datas mantém
-                            str(row.get('ORDEM_DE_CARGA', ''))
-                        )
-                        st.toast("✅ Dados Atualizados!")
-                        time.sleep(1)
-                        st.rerun()
-
-            st.divider()
-            
-            # Link NFD e Chat Rápido
             link_nfd = row.get('LINK_NFD', '')
             if link_nfd and str(link_nfd).startswith("http"):
-                st.markdown(f"📄 **[Ver Nota Fiscal de Devolução]({link_nfd})**")
+                df_itens = carregar_itens_por_processo(id_proc)
+                numero_nfd = "N/A"
+                if not df_itens.empty and "NUMERO_NFD" in df_itens.columns:
+                    numero_nfd = df_itens["NUMERO_NFD"].iloc[0]
+                    if pd.isna(numero_nfd) or str(numero_nfd).strip() == "": numero_nfd = "N/A"
+                
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="color: white; font-weight: 600; font-size: 14px;">📄 Nota Fiscal de Devolução (NFD): {numero_nfd}</div>
+                    <a href="{link_nfd}" target="_blank" class="btn-ghost" style="border-color: white !important; color: white !important;">Abrir Documento</a>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown(f"**Fiscal:** {badge_fisc} &nbsp; | &nbsp; **Ordem de Carga:** {row.get('ORDEM_DE_CARGA','-')} &nbsp; | &nbsp; **Origem:** {row.get('LOCAL','-')} &nbsp; | &nbsp; **Data:** {row.get('DATA_CRIACAO', '-')}")
+            st.caption(f"Responsável: {row.get('RESPONSAVEL','-')} | OC: {row.get('OC','-')} | TIPO VEÍCULO: {row.get('TIPO_VEICULO','-')}| TIPO CARGA: {row.get('TIPO_CARGA','-')}")
+            st.divider()
 
-            # Botão Detalhes Completo
-            if st.button("Ver Histórico & Detalhes Completos", key=f"det_btn_{id_proc}"):
-                # Importa modal se necessário ou cria um expander extra
-                st.info("Funcionalidade de detalhes expandidos (Chat/Histórico) disponível no Kanban ou implemente o modal aqui.")
+            # TABELA NO EXPANDER
+            df_itens = carregar_itens_por_processo(id_proc)
+            if not df_itens.empty:
+                st.markdown(f"**Itens do Processo** (Total: {valor_total_str})")
+                df_show = df_itens.copy()
+                if "VALOR_TOTAL" in df_show.columns: 
+                    df_show["VALOR_TOTAL"] = df_show["VALOR_TOTAL"].apply(formatar_moeda)
+                if "VALOR_UNIT" in df_show.columns:
+                    df_show["VALOR_UNIT"] = df_show["VALOR_UNIT"].apply(formatar_moeda)
+                    
+                cols_show = [c for c in ["COD_ITEM", "DESCRICAO", "QTD", "VALOR_UNIT", "VALOR_TOTAL"] if c in df_show.columns]
+                st.dataframe(df_show[cols_show], use_container_width=True, hide_index=True)
+            
+            st.write("")
+            col_l, col_r = st.columns([1.1, 1])
+            
+            # --- ÁREA DE EDIÇÃO ---
+            with col_l:
+                st.markdown("#### Tratativa & Transporte")
+                with st.form(key=f"f_st_{id_proc}"):
+                    c_s1, c_s2 = st.columns(2)
+                    lst_log = ["ABERTO", "EM ANÁLISE", "EM TRÂNSITO", "CONCLUÍDO", "CANCELADO"]
+                    i_log = lst_log.index(status_log) if status_log in lst_log else 0
+                    n_log = c_s1.selectbox("Logística", lst_log, index=i_log)
+                    
+                    lst_fisc = ["PENDENTE", "APROVADO", "REJEITADO"]
+                    i_fisc = lst_fisc.index(status_fisc) if status_fisc in lst_fisc else 0
+                    n_fisc = c_s2.selectbox("Fiscal", lst_fisc, index=i_fisc)
+                    
+                    st.markdown("---")
+                    c_t1, c_t2 = st.columns(2)
+                    n_veiculo = c_t1.text_input("Veículo", value=str(row.get("VEICULO", "") or ""))
+                    n_motorista = c_t2.text_input("Motorista", value=str(row.get("MOTORISTA", "") or ""))
 
-# --------------------------------------------------------------------------
-# MODO KANBAN (SIMPLIFICADO)
-# --------------------------------------------------------------------------
+                    c_loc1, c_loc2 = st.columns(2)
+                    n_loc_atual = c_loc1.text_input("Local Atual", value=str(row.get("LOCAL_ATUAL", "") or ""))
+                    n_loc_dest = c_loc2.text_input("Destino", value=str(row.get("LOCAL_DESTINO", "") or ""))
+
+                    st.markdown("---")
+                    c_oc_edit = st.columns([1])[0]
+                    val_oc_atual = str(row.get('OC', ''))
+                    if val_oc_atual == "None": val_oc_atual = ""
+                    n_oc = c_oc_edit.text_input("Nº Ocorrência (OC)", value=val_oc_atual)
+
+                    st.markdown("---")
+                    c_dados, c_anexo = st.columns([1, 1.5]) 
+                    with c_dados:
+                        dt_base = str(row.get('DATA_DEVOLUCAO_CTE', '') or row.get('DATA_EMISSAO', ''))
+                        st_atual = str(row.get('STATUS', 'ABERTO'))
+                        dt_final = str(row.get('DATA_FIM', '')) 
+                        msg_prazo, cor_prazo = calcular_prazo_alerta(dt_base, st_atual, dt_final)
+                        
+                        st.markdown(f"""<div style="margin-top: 5px; margin-bottom: 15px; padding: 8px; border-radius: 4px; background-color: {cor_prazo}20; border-left: 4px solid {cor_prazo}; color: {cor_prazo}; font-weight: bold; font-size: 13px;">⏱️ {msg_prazo} <br><span style="font-size:10px; color:#888">Início: {dt_base}</span></div>""", unsafe_allow_html=True)
+
+                        val_cte_atual = str(row.get("COD_CTE",""))
+                        if val_cte_atual == "None": val_cte_atual = ""
+                        n_cod_cte = st.text_input("Cód. CTE", value=val_cte_atual)
+
+                        data_str = str(row.get("DATA_DEVOLUCAO_CTE",""))
+                        val_data_inicial = None 
+                        if data_str and data_str not in ["None", "", "NaT"]:
+                            try: val_data_inicial = pd.to_datetime(data_str, dayfirst=True).date()
+                            except: val_data_inicial = None
+                        n_data_dev = st.date_input("Data Devolução", value=val_data_inicial, format="DD/MM/YYYY")
+                        
+                    with c_anexo:
+                        arqcte_status = st.file_uploader("PDF do CTE", key=f"up_cte_{id_proc}", type=["pdf", "png", "jpg"])
+                        link_anexo_atual_cte = str(row.get("CTE_ANEXO",""))
+                        if link_anexo_atual_cte and link_anexo_atual_cte.startswith("http"):
+                            st.caption(f"📎 Atual: [Ver Arquivo]({link_anexo_atual_cte})")
+
+                    st.markdown("---")
+                    c_cob1, c_cob2 = st.columns([1, 1.5])
+                    with c_cob1:
+                        val_cob_atual = str(row.get('COD_COB', ''))
+                        if val_cob_atual == "None": val_cob_atual = ""
+                        n_cod_cob = c_cob1.text_input("Cód. Ocorrência", value=val_cob_atual)
+                        data_str_cob = str(row.get("COB_DATA",""))
+                        val_data_cob = None
+                        if data_str_cob and data_str_cob not in ["None", "", "NaT"]:
+                            try: val_data_cob = pd.to_datetime(data_str_cob).date()
+                            except: val_data_cob = None
+                        n_data_cob = st.date_input("Data Emissão COB", value=val_data_cob, format="DD/MM/YYYY")
+                                
+                    with c_cob2:
+                        arq_status = c_cob2.file_uploader("Evidência COB", key=f"up_cob_{id_proc}", type=["pdf", "png", "jpg"])
+                        link_anexo_atual = str(row.get('COB_ANEXO', ''))
+                        if link_anexo_atual and link_anexo_atual.startswith('http'):
+                            st.caption(f"COB Anexada: [Ver Arquivo]({link_anexo_atual})")
+                        st.write("")
+                    
+                    val_ordem_carga = str(row.get('ORDEM_DE_CARGA', '') or row.get('ORDEM_CARREGAMENTO', '') or '')
+
+                    if st.form_submit_button("💾 Salvar Tudo", type="primary"):
+                        with st.spinner("Processando..."):
+                            link_final_cte = ""
+                            if arqcte_status:
+                                link_final_cte = upload_bytes_cloudinary(arqcte_status.getvalue(), f"CTE_{id_proc}_{arqcte_status.name}")
+                                salvar_mensagem(id_proc, st.session_state.get('usuario', 'System'), f"📎 Novo CTE anexado.", link_final_cte)
+                            
+                            link_final_cob = ""
+                            if arq_status:
+                                link_final_cob = upload_bytes_cloudinary(arq_status.getvalue(), f"COB_{id_proc}_{arq_status.name}")
+                                salvar_mensagem(id_proc, st.session_state.get('usuario', 'System'), f"📎 Nova evidência anexada.", link_final_cob)
+                            
+                            sucesso = atualizar_tratativa_completa(
+                                id_proc, n_log, n_fisc, n_cod_cob, 
+                                link_final_cob, link_final_cte, n_cod_cte,
+                                n_veiculo, n_motorista, n_loc_atual, n_loc_dest,
+                                n_oc, n_data_dev, n_data_cob, val_ordem_carga
+                            )
+
+                            if sucesso:
+                                st.success("✅ Atualizado com sucesso!")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("❌ Erro ao salvar na planilha.")
+            
+            # --- CHAT (DIREITA) ---
+            with col_r:
+                head_c1, head_c2 = st.columns([3, 1])
+                head_c1.markdown("#### Histórico")
+                if head_c2.button("⤢", key=f"full_{id_proc}", help="Detalhes"):
+                    modal_detalhes_completo(id_proc, row, st.session_state.get('usuario', 'Anon'))
+
+                cont_chat = st.container(height=500, border=True)
+                df_msgs = carregar_mensagens(id_proc)
+                with cont_chat:
+                    renderizar_chat_visual(df_msgs)
+
+                with st.container():
+                    c_anexo, c_input, c_btn = st.columns([0.15, 0.70, 0.15])
+                    with c_anexo:
+                        with st.popover("📎", use_container_width=True):
+                            key_up = f"up_{id_proc}_{st.session_state.reset_uploader}"
+                            file_up = st.file_uploader("", type=["pdf", "png", "jpg"], key=key_up)
+                            if file_up:
+                                st.session_state.anexo_cache[id_proc] = {'bytes': file_up.getvalue(), 'nome': file_up.name}
+                            if id_proc in st.session_state.anexo_cache:
+                                st.success("!")
+                                if st.button("x", key=f"cls_{id_proc}"): limpar_cache(id_proc); st.rerun()
+
+                    with st.form(key=f"form_chat_{id_proc}", clear_on_submit=True):
+                        c_in, c_send = st.columns([5, 1])
+                        texto_msg = c_in.text_input("Msg", placeholder="Digite...", label_visibility="collapsed")
+                        enviou = c_send.form_submit_button("➤", use_container_width=True)
+                        if enviou and texto_msg:
+                            link_final = ""
+                            if id_proc in st.session_state.anexo_cache:
+                                dados = st.session_state.anexo_cache[id_proc]
+                                link_final = upload_bytes_cloudinary(dados['bytes'], f"CHAT_{id_proc}_{dados['nome']}")
+                                limpar_cache(id_proc)
+                            salvar_mensagem(id_proc, st.session_state.get('usuario','Anon'), texto_msg, link_final)
+                            st.rerun()
+                st.divider()
+                col_msg, col_btn = st.columns([3, 1])
+                with col_msg: st.caption(f"Zona de Perigo: A exclusão do ID **{id_proc}** é irreversível.")
+                with col_btn:
+                    with st.popover("🗑️", use_container_width=True):
+                        st.markdown(f"Tem certeza que deseja apagar o processo **{id_proc}**?")
+                        if st.button("Confirmar Exclusão", type="primary", key=f"btn_del_{id_proc}"):
+                            with st.spinner("Excluindo registros..."):
+                                if excluir_processo_completo(id_proc):
+                                    st.success("Processo excluído com sucesso!")
+                                    time.sleep(1)
+                                    st.rerun()
+                                else:
+                                    st.error("Erro ao excluir.")
+
+# =================================================================================
+# MODO KANBAN (MANTER O ORIGINAL)
+# =================================================================================
 elif tipo_visualizacao == "Kanban":
+
     fluxo = ["ABERTO", "EM ANÁLISE", "EM TRÂNSITO", "CONCLUÍDO"]
     cores_border = {"ABERTO": "#FF4B4B", "EM ANÁLISE": "#FFA500", "EM TRÂNSITO": "#29B5E8", "CONCLUÍDO": "#00C853"}
     
@@ -364,6 +688,7 @@ elif tipo_visualizacao == "Kanban":
     
     for i, status in enumerate(fluxo):
         with cols[i]:
+            # Cabeçalho
             cor = cores_border[status]
             st.markdown(f"""<div style="border-bottom: 2px solid {cor}; padding-bottom: 5px; margin-bottom: 15px; font-weight: 700; color: #BBB; font-size: 13px; text-transform: uppercase;">{status}</div>""", unsafe_allow_html=True)
             
@@ -372,4 +697,61 @@ elif tipo_visualizacao == "Kanban":
                 st.markdown(f"<div style='color: #444; font-size: 11px; text-align: center; margin-top: 20px;'>— Vazio —</div>", unsafe_allow_html=True)
             
             for _, row in itens.iterrows():
-                st.info(f"**{row['ID_PROCESSO']}**\n\nNF: {row.get('NF', '-')}")
+                id_proc = row['ID_PROCESSO']
+                
+                # Dados
+                st_fiscal = row.get('STATUS_FISCAL', 'PENDENTE')
+                cor_fisc = "#00C853" if "APROVADO" in st_fiscal else "#FF4B4B" if "REJEITADO" in st_fiscal else "#FFA500" if "AGUARDANDO" in st_fiscal else "#FFD700"
+                cor_txt_fisc = "#000" if st_fiscal == "PENDENTE" else "#FFF"
+                
+                veic = str(row.get('VEICULO', '') or '?')
+                mot = str(row.get('MOTORISTA', '') or '?')
+                loc_atual = str(row.get('LOCAL_ATUAL', '...') or '...')
+                loc_dest = str(row.get('LOCAL_DESTINO', '?') or '?')
+                
+                # HTML CLEAN
+                html_card = f"""
+                    <div class="k-card-header">
+                        <span class="k-id">{id_proc}</span>
+                        <span class="k-fiscal-badge" style="background-color: {cor_fisc}; color: {cor_txt_fisc}">{st_fiscal}</span>
+                    </div>
+                    <div class="k-row"><span class="k-label">NF</span> <span class="k-value">{row.get('NF', '-')}</span></div>
+                    <div class="k-row"><span class="k-label">Resp</span> <span class="k-value">{str(row.get('RESPONSAVEL', 'System')).split(' ')[0].title()}</span></div>
+                """
+                
+                # Rota Clean com Destaque
+                if loc_atual != '...' and loc_atual != '':
+                    html_card += f"""
+                    <div class="k-rota-container">
+                        <div class="k-transport-highlight">{veic} • {mot}</div>
+                            <div class="k-rota-path">
+                            <div style="font-size:11px; color:#AAA;">
+                            <span>{row.get('LOCAL', '?')}</span>
+                            <span class="k-seta" style="color:red; font-size:11px;">→</span>
+                            <span class="k-current" style="font-size:11px; font-weight:bold; color:#29B5E8;">{loc_atual}</span>
+                            <span class="k-seta" style="color:red; font-size:11px;">→</span>
+                            <span>{loc_dest}</span>
+                        </div>
+                        </div>
+                    </div>
+                    """
+                
+                with st.container(border=True):
+                    st.markdown(html_card, unsafe_allow_html=True)
+                    
+                    st.write("")
+                    b1, b2, b3 = st.columns([1, 4, 1])
+                    
+                    # Botões Limpos
+                    if i > 0:
+                        if b1.button("←", key=f"prev_{id_proc}", help=f"Mover para {fluxo[i-1]}"):
+                            atualizar_status_devolucao(id_proc, fluxo[i-1])
+                            st.rerun()
+                    
+                    if b2.button("Detalhes", key=f"det_{id_proc}", use_container_width=True):
+                        modal_detalhes_completo(id_proc, row, st.session_state.get('usuario', 'Anon'))
+                    
+                    if i < len(fluxo) - 1:
+                        if b3.button("→", key=f"next_{id_proc}", help=f"Mover para {fluxo[i+1]}"):
+                            atualizar_status_devolucao(id_proc, fluxo[i+1])
+                            st.rerun()
