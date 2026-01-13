@@ -13,11 +13,20 @@ FUSO_BR = pytz.timezone('America/Sao_Paulo')
 
 st.set_page_config(page_title="Dashboard - Maroso", page_icon="📊", layout="wide")
 
-# ==============================================================================
-# 1. CSS RESPONSIVO (LIGHT/DARK MODE & CARDS TRANSPARENTES)
-# ==============================================================================
 st.markdown("""
 <style>
+    /* --- ANIMAÇÃO DE ENTRADA (NOVO) --- */
+    @keyframes slideUpFade {
+        0% {
+            opacity: 0;
+            transform: translateY(15px) scale(0.98);
+        }
+        100% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+    }
+
     /* --- SIDEBAR AJUSTADA --- */
     [data-testid="stSidebarNav"] {display: none;}
     section[data-testid="stSidebar"] > div {
@@ -25,13 +34,14 @@ st.markdown("""
         padding-bottom: 20px !important;
     }
 
-    /* --- HEADER (Adaptação ao Tema) --- */
+    /* --- HEADER --- */
     .welcome-container {
         background-color: var(--secondary-background-color);
         padding: 20px 25px; border-radius: 12px;
         border-left: 5px solid #FF4B4B;
         margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center;
         box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        animation: slideUpFade 0.5s ease-out; /* Anima o Header também */
     }
     .welcome-text h2 { margin: 0; font-size: 24px; font-weight: 700; color: var(--text-color); }
     .welcome-text p { margin: 2px 0 0 0; font-size: 14px; opacity: 0.8; color: var(--text-color); }
@@ -42,15 +52,16 @@ st.markdown("""
         font-size: 12px; font-weight: 600; color: var(--text-color);
     }
 
-    /* --- KPI CARDS (Tipo Page 5) --- */
+    /* --- KPI CARDS --- */
     div[data-testid="stMetric"] {
         background-color: var(--secondary-background-color);
         padding: 15px; border-radius: 10px;
         border: 1px solid rgba(128, 128, 128, 0.1);
         box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        animation: slideUpFade 0.6s ease-out; /* Anima os KPIs com leve atraso visual */
     }
 
-    /* --- KANBAN CARDS (Design Glass/Transparente) --- */
+    /* --- KANBAN HEADER --- */
     .k-column-header {
         font-size: 12px; font-weight: 800; text-transform: uppercase;
         color: var(--text-color); opacity: 0.7;
@@ -58,19 +69,24 @@ st.markdown("""
         padding-bottom: 8px; margin-bottom: 20px; letter-spacing: 1px;
     }
     
+    /* --- KANBAN CARD (COM ANIMAÇÃO) --- */
     .kanban-card {
         background-color: var(--secondary-background-color);
         border: 1px solid rgba(128, 128, 128, 0.2);
         border-radius: 10px; padding: 14px; margin-bottom: 12px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        transition: all 0.2s ease-in-out;
         color: var(--text-color);
+        
+        /* A MÁGICA ACONTECE AQUI */
+        animation: slideUpFade 0.4s ease-out forwards;
+        transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
     }
     
     .kanban-card:hover {
-        transform: translateY(-3px); 
-        box-shadow: 0 5px 10px rgba(0,0,0,0.1);
+        transform: translateY(-4px) scale(1.01); 
+        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
         border-color: #FF4B4B;
+        z-index: 1; /* Garante que o card flutue sobre os outros ao passar o mouse */
     }
 
     .k-card-header {
@@ -90,18 +106,18 @@ st.markdown("""
     .k-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
     .k-icon { opacity: 0.7; width: 16px; text-align: center; }
 
-    /* Rota Box - Estilo sutil */
+    /* Rota Box */
     .k-rota-box {
-        background-color: rgba(128, 128, 128, 0.1); /* Transparente adaptativo */
+        background-color: rgba(128, 128, 128, 0.1);
         border-radius: 6px; padding: 8px; margin-top: 10px;
         font-size: 11px; border: 1px solid rgba(128, 128, 128, 0.1);
     }
-    .k-rota-title { font-weight: 700; color: #29B5E8; margin-bottom: 4px; display: flex; align-items: center; gap: 5px;}
+    .k-rota-title { font-weight: 700; color: #29B5E8; margin-bottom: 4px; }
     .k-rota-flow { display: flex; align-items: center; gap: 6px; color: var(--text-color); opacity: 0.8; }
     
     .k-time { 
         font-size: 11px; color: var(--text-color); opacity: 0.5; 
-        margin-top: 10px; text-align: right; font-style: italic; display: flex; justify-content: flex-end; align-items: center; gap: 4px;
+        margin-top: 10px; text-align: right; font-style: italic;
     }
 </style>
 """, unsafe_allow_html=True)
