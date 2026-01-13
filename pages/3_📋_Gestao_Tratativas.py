@@ -309,8 +309,11 @@ if not df_proc.empty:
         df_proc["STATUS"] = "ABERTO"
     
     # Verifica STATUS_FISCAL
-    if "STATUS_FISCAL" not in df_proc.columns: 
+    if "STATUS_FISCAL" in df_proc.columns: 
         df_proc["STATUS_FISCAL"] = "PENDENTE"
+        df_proc['STATUS_FISCAL'] = df_proc['STATUS_FISCAL'].fillna("PENDENTE").astype(str).str.upper().str.strip()
+    else:
+        df_proc['STATUS_FISCAL'] = "PENDENTE"
         
     # Verifica TIPO_CARGA (Nova coluna) - Garante que exista para não dar erro futuro
     if "TIPO_CARGA" not in df_proc.columns:
