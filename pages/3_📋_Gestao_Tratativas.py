@@ -110,6 +110,37 @@ def calcular_total_processo(id_proc):
 # ==============================================================================
 st.markdown("""
 <style>
+            /* --- CORREÇÃO DA SIDEBAR (FORÇAR TOPO) --- */
+    /* Remove o padding padrão gigante do Streamlit no topo da sidebar */
+    section[data-testid="stSidebar"] .block-container {
+        padding-top: 1rem !important; /* Reduzido de 6rem para 1rem */
+        padding-bottom: 1rem !important;
+    }
+    
+    /* Garante que o container ocupe a altura toda para o Flexbox funcionar */
+    section[data-testid="stSidebar"] > div {
+        height: 100vh;
+    }
+    
+    /* Ajusta o conteúdo interno para começar do topo absoluto */
+    div[data-testid="stSidebarUserContent"] {
+        padding-top: 0rem !important;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        justify-content: space-between; /* Separa Topo e Rodapé */
+    }
+
+    /* Reduz margem da imagem do logo */
+    div[data-testid="stImage"] {
+        margin-bottom: 20px;
+    }
+
+    /* Esconde Nav Nativa (Padrão) */
+    [data-testid="stSidebarNav"] {display: none;}
+    
+    /* --- ESTILOS DOS CARDS (MANTIDOS) --- */
+    /* ... (Mantenha o resto do CSS dos Cards e Kanban aqui) ... */
     /* --- ANIMAÇÃO DE ENTRADA --- */
     @keyframes slideUpFade {
         0% { opacity: 0; transform: translateY(15px) scale(0.98); }

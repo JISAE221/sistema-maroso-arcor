@@ -17,6 +17,7 @@ st.set_page_config(page_title="Controle de Estoque", page_icon="📦", layout="w
 
 st.markdown("""
 <style>
+
     /* Esconde Nav Nativa */
     [data-testid="stSidebarNav"] {display: none;}
     
