@@ -180,7 +180,13 @@ if btn_buscar and nf_busca:
     def get_val(chave, alt=""): return str(dados_existentes.get(chave, "") or alt) if ja_existe else ""
     
     st.session_state['cache_veiculo'] = get_val("VEICULO")
-    st.session_state['cache_motivo'] = motivo_limpo
+    
+    # --- CORREÇÃO AQUI ---
+    # Não use 'motivo_limpo' aqui. Use get_val("MOTIVO_COMPLETO")
+    # Se for um processo novo, ele começa vazio "" e será preenchido no Passo 4.
+    st.session_state['cache_motivo'] = get_val("MOTIVO_COMPLETO") 
+    # ---------------------
+
     st.session_state['cache_tip_veiculo'] = get_val("TIPO_VEICULO")
     st.session_state['cache_motorista'] = get_val("MOTORISTA")
     st.session_state['cache_oc'] = get_val("OC")
@@ -235,7 +241,9 @@ if btn_buscar and nf_busca:
                         if nf_busca in linha:
                             partes = linha.split('-', 1) 
                             motivo_limpo = partes[1].strip() if len(partes) > 1 else linha
-                            break 
+                            break
+                        
+                st.session_state['cache_motivo'] = motivo_limpo 
                 
                 # Preenche Cache com dados encontrados
                 st.session_state['cache_veiculo'] = str(res_x3.get(COL_X3_VEICULO, "") or "")
