@@ -181,69 +181,43 @@ if df.empty:
     st.warning("📭 Nenhum dado encontrado.")
     st.stop()
 
-# --- 1. FILTRO DE DATA (EXPANDER) ---
-with st.expander("🗓️ Filtros & Visualização", expanded=True):
-    col_data, col_vazia = st.columns([1, 2])
-    with col_data:
+# ==============================================================================
+# 5. FILTROS GERAIS (Tudo no Topo para cruzar dados)
+# ==============================================================================
+with st.expander("🔍 Filtros & Visualização", expanded=True):
+    f1, f2, f3 = st.columns([1, 1, 1.5])
+    
+    # 1. Filtro de Data
+    with f1:
         dt_min = df["DT_OBJ"].min().date() if "DT_OBJ" in df and not df["DT_OBJ"].isna().all() else datetime.now().date()
         dt_max = df["DT_OBJ"].max().date() if "DT_OBJ" in df and not df["DT_OBJ"].isna().all() else datetime.now().date()
-        datas_sel = st.date_input("Filtrar Período", value=(dt_min, dt_max), format="DD/MM/YYYY")
+        datas_sel = st.date_input("Período", value=(dt_min, dt_max), format="DD/MM/YYYY")
 
-# APLICA FILTRO DE DATA (GLOBAL)
-df_date_filt = df.copy()
+    # 2. Filtro de Local (Trazido para cima)
+    with f2:
+        destinos = sorted(df["LOCAL_DESTINO"].unique())
+        destinos_sel = st.multiselect("Locais", options=destinos, placeholder="Todos os locais")
+
+    # 3. Busca Global (Trazido para cima)
+    with f3:
+        search_term = st.text_input("Busca Rápida", placeholder="NF, Item, OC, ID...")
+
+# ==============================================================================
+# 6. ENGINE DE FILTRAGEM (CRUZAMENTO)
+# ==============================================================================
+df_final = df.copy()
+
+# A. Aplica Data
 if isinstance(datas_sel, tuple) and len(datas_sel) == 2:
     start, end = datas_sel
-    if "DT_OBJ" in df_date_filt.columns:
-        df_date_filt = df_date_filt[(df_date_filt["DT_OBJ"].dt.date >= start) & (df_date_filt["DT_OBJ"].dt.date <= end)]
+    if "DT_OBJ" in df_final.columns:
+        df_final = df_final[(df_final["DT_OBJ"].dt.date >= start) & (df_final["DT_OBJ"].dt.date <= end)]
 
-# --- 2. CARDS DE KPI (LAYOUT IGUAL PAGE 3) ---
-qtd_total = df_date_filt["QTD_FLOAT"].sum()
-valor_total = df_date_filt["VALOR_TOTAL_FLOAT"].sum()
-nfs_envolvidas = df_date_filt["NF"].nunique()
-sem_destino = len(df_date_filt[df_date_filt["LOCAL_DESTINO"] == "Sem Destino"])
-
-st.write("") # Espaço
-c_kpi1, c_kpi2, c_kpi3, c_kpi4 = st.columns(4)
-
-def card_html(label, value, border_class, sub_html=""):
-    return f"""
-    <div class="kpi-card {border_class}">
-        <div class="kpi-label">{label}</div>
-        <div class="kpi-value">{value}</div>
-        {sub_html}
-    </div>
-    """
-
-with c_kpi1:
-    st.markdown(card_html("Volume Total (Qtd)", f"{int(qtd_total)}", "border-white"), unsafe_allow_html=True)
-
-with c_kpi2:
-    st.markdown(card_html("Valor em Mercadoria", f"R$ {valor_total:,.2f}", "border-green"), unsafe_allow_html=True)
-
-with c_kpi3:
-    st.markdown(card_html("Processos / NFs", f"{nfs_envolvidas}", "border-blue"), unsafe_allow_html=True)
-
-with c_kpi4:
-    st.markdown(card_html("Pend. de Destino", f"{sem_destino}", "border-red"), unsafe_allow_html=True)
-
-
-# --- 3. BARRA DE FILTROS CLEAN ---
-st.write("")
-c_filt1, c_filt2 = st.columns([1, 2])
-
-with c_filt1:
-    destinos = sorted(df_date_filt["LOCAL_DESTINO"].unique())
-    destinos_sel = st.multiselect("Locais de Destino", options=destinos, placeholder="Todos os locais")
-
-with c_filt2:
-    search_term = st.text_input("Buscar Geral (NF, Item, OC, ID...)", placeholder="Digite para pesquisar...")
-
-# --- APLICAÇÃO DOS FILTROS FINAIS ---
-df_final = df_date_filt.copy()
-
+# B. Aplica Local
 if destinos_sel:
     df_final = df_final[df_final["LOCAL_DESTINO"].isin(destinos_sel)]
 
+# C. Aplica Busca
 if search_term:
     t = search_term.lower()
     mask = (
@@ -256,16 +230,49 @@ if search_term:
     df_final = df_final[mask]
 
 # ==============================================================================
-# 4. TABELA E GRÁFICO (ORDEM INVERTIDA)
+# 7. KPIs (CALCULADOS SOBRE OS DADOS CRUZADOS/FILTRADOS)
+# ==============================================================================
+st.write("") 
+c_kpi1, c_kpi2, c_kpi3, c_kpi4 = st.columns(4)
+
+qtd_total = df_final["QTD_FLOAT"].sum()
+valor_total = df_final["VALOR_TOTAL_FLOAT"].sum()
+nfs_envolvidas = df_final["NF"].nunique()
+sem_destino = len(df_final[df_final["LOCAL_DESTINO"] == "Sem Destino"])
+
+def card_html(label, value, border_class, sub_html=""):
+    return f"""
+    <div class="kpi-card {border_class}">
+        <div class="kpi-label">{label}</div>
+        <div class="kpi-value">{value}</div>
+        {sub_html}
+    </div>
+    """
+
+with c_kpi1:
+    st.markdown(card_html("Volume Filtrado", f"{int(qtd_total)}", "border-white"), unsafe_allow_html=True)
+
+with c_kpi2:
+    st.markdown(card_html("Valor Filtrado", f"R$ {valor_total:,.2f}", "border-green"), unsafe_allow_html=True)
+
+with c_kpi3:
+    st.markdown(card_html("Processos / NFs", f"{nfs_envolvidas}", "border-blue"), unsafe_allow_html=True)
+
+with c_kpi4:
+    msg_dest = f"⚠️ {sem_destino} pendentes" if sem_destino > 0 else "Tudo Alocado"
+    st.markdown(card_html("Sem Destino", f"{sem_destino}", "border-red", f"<div style='font-size:11px; margin-top:5px; color:#e74c3c'>{msg_dest}</div>" if sem_destino > 0 else ""), unsafe_allow_html=True)
+
+# ==============================================================================
+# 8. VISUALIZAÇÃO (TABELA EM CIMA, GRÁFICO EM BAIXO)
 # ==============================================================================
 st.divider()
 
 if df_final.empty:
     st.info("🔎 Nenhum registro encontrado com esses filtros.")
 else:
-    # --- 1. TABELA (AGORA NO TOPO) ---
+    # --- 1. TABELA (TOPO) ---
     st.subheader(f"📋 Lista Detalhada ({len(df_final)})")
-    st.caption("👆 Clique na linha para ver o rastro")
+    st.caption("👆 Clique na linha para ver detalhes")
     
     cols_view = ["ID_PROCESSO", "OC", "NF", "DESCRICAO", "QTD", "VALOR_TOTAL", "LOCAL_DESTINO"]
     cols_final = [c for c in cols_view if c in df_final.columns]
@@ -276,7 +283,7 @@ else:
         df_display[cols_final],
         use_container_width=True,
         hide_index=True,
-        height=400,
+        height=350,
         on_select="rerun",
         selection_mode="single-row"
     )
@@ -286,25 +293,30 @@ else:
         item_selecionado = df_display.iloc[idx]
         modal_rastro(item_selecionado)
 
-    st.write("") # Espaço entre tabela e gráfico
+    st.write("")
     st.divider()
 
-    # --- 2. GRÁFICO (AGORA EMBAIXO) ---
-    st.subheader("🔥 Top Valor em Estoque")
+    # --- 2. GRÁFICO (EM BAIXO) ---
+    st.subheader("🔥 Top Valor (Filtrado)")
+    
+    # Agrupa com base nos dados filtrados
     df_tier = df_final.groupby(["DESCRICAO", "LOCAL_DESTINO"])["VALOR_TOTAL_FLOAT"].sum().reset_index().sort_values("VALOR_TOTAL_FLOAT", ascending=False).head(10)
     
-    fig = px.bar(
-        df_tier, 
-        x="VALOR_TOTAL_FLOAT", 
-        y="DESCRICAO", 
-        orientation='h', 
-        text_auto='.2s', 
-        color="LOCAL_DESTINO", 
-        title=""
-    )
-    fig.update_layout(
-        margin=dict(l=0, r=0, t=20, b=0),
-        yaxis={'categoryorder':'total ascending'}, 
-        legend=dict(orientation="h", y=1.1)
-    )
-    st.plotly_chart(fig, use_container_width=True)
+    if not df_tier.empty:
+        fig = px.bar(
+            df_tier, 
+            x="VALOR_TOTAL_FLOAT", 
+            y="DESCRICAO", 
+            orientation='h', 
+            text_auto='.2s', 
+            color="LOCAL_DESTINO", 
+            title=""
+        )
+        fig.update_layout(
+            margin=dict(l=0, r=0, t=20, b=0),
+            yaxis={'categoryorder':'total ascending'}, 
+            legend=dict(orientation="h", y=1.1)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Sem dados suficientes para o gráfico.")
