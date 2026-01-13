@@ -136,7 +136,7 @@ def modal_rastro(item):
     col_log2.text_input("Veículo", value=item.get('VEICULO', '-'), disabled=True)
     col_log3.text_input("Destino Atual", value=item.get('LOCAL_DESTINO', '-'), disabled=True)
     
-    if st.button("Fechar Detalhes", use_container_width=True):
+    if st.button("Fechar Detalhes", use_container_width=False):
         st.rerun()
 
 # ==============================================================================
