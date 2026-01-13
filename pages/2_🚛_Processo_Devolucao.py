@@ -242,7 +242,7 @@ if btn_buscar and nf_busca:
                             partes = linha.split('-', 1) 
                             motivo_limpo = partes[1].strip() if len(partes) > 1 else linha
                             break
-                        
+
                 st.session_state['cache_motivo'] = motivo_limpo 
                 
                 # Preenche Cache com dados encontrados
@@ -442,7 +442,7 @@ if dados:
                     dt_dev_str = dt_dev_obj.strftime("%d/%m/%Y") if dt_dev_obj else ""
                     v_status_oc = "ENCERRADA" if v_dt_fim and len(str(v_dt_fim)) > 5 else "ABERTA"
                     v_prazo_txt, _ = calcular_prazo_alerta(dados.get("DATA_EMISSAO"))
-                    motivo_finbal = st.session_state.get("input_motivo". st.session_state.get("cache_motivo", ""))
+                    motivo_finbal = st.session_state.get("input_motivo", st.session_state.get("cache_motivo", ""))
                     
                     motivo_final = st.session_state.get("input_motivo", dados.get("MOTIVO_COMPLETO", ""))
                     pacote_salvar = {
