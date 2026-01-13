@@ -428,8 +428,7 @@ with c3:
     st.markdown(card_html("Concluídos", f"{concluidos}", "border-green"), unsafe_allow_html=True)
 
 with c4:
-    sub_fisc = f"<div class='kpi-sub'>⚠️ {pend_fisc} notas travadas</div>" if pend_fisc > 0 else "<div style='color:#2ecc71; font-size:12px; margin-top:5px;'>Tudo Ok!</div>"
-    st.markdown(card_html("Pend. Fiscal", f"{pend_fisc}", "border-orange", sub_fisc), unsafe_allow_html=True)
+    st.markdown(card_html("Pend. Fiscal", f"{pend_fisc}", "border-orange"), unsafe_allow_html=True)
 
 st.write("")
 
