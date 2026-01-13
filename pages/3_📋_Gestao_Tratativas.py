@@ -106,69 +106,85 @@ def calcular_total_processo(id_proc):
     return total, total_fmt
 
 # ==============================================================================
-# CSS: ESTILOS VISUAIS
+# CSS: ESTILOS VISUAIS (ATUALIZADO COM DESIGN DA PAGE 1)
 # ==============================================================================
 st.markdown("""
 <style>
+    /* --- ANIMAÇÃO DE ENTRADA --- */
+    @keyframes slideUpFade {
+        0% { opacity: 0; transform: translateY(15px) scale(0.98); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
     /* Esconde Nav Nativa */
     [data-testid="stSidebarNav"] {display: none;}
     
-    /* --- CARD DESIGN RESPONSIVO --- */
+    /* Ajustes Gerais Sidebar */
+    section[data-testid="stSidebar"] > div {height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding-top: 0px !important; padding-bottom: 20px !important;}
+    
+    /* --- KPI CARDS (Mantidos da Page 3) --- */
     .kpi-card {
-        background-color: transparent;
-        border-radius: 8px;
-        padding: 15px 20px;
-        margin-bottom: 20px;
-        /* Sombra suave que funciona bem nos dois modos */
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
-        /* Borda cinza bem clara e transparente para funcionar no Branco e no Preto */
-        border: 1px solid rgba(128, 128, 128, 0.2);
-        height: 100px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
+        background-color: transparent; border-radius: 8px; padding: 15px 20px;
+        margin-bottom: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+        border: 1px solid rgba(128, 128, 128, 0.2); height: 100px;
+        display: flex; flex-direction: column; justify-content: center;
     }
+    .kpi-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--text-color); opacity: 0.6; margin-bottom: 5px; }
+    .kpi-value { font-size: 32px; font-weight: 800; color: var(--text-color); line-height: 1; }
     
-    .kpi-label {
-        font-size: 12px;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 1px;
-        /* COR MÁGICA: Pega a cor do texto do tema e aplica 60% de opacidade */
-        color: var(--text-color);
-        opacity: 0.6;
-        margin-bottom: 5px;
-    }
-    
-    .kpi-value {
-        font-size: 32px;
-        font-weight: 800;
-        /* COR MÁGICA: Fica Branco no Dark Mode e Preto no Light Mode */
-        color: var(--text-color);
-        line-height: 1;
-    }
-    
-    .kpi-sub {
-        font-size: 11px;
-        margin-top: 8px;
-        color: #e74c3c; /* Vermelho é ok manter fixo, pois dá leitura nos dois */
-        font-weight: 600;
-    }
-    
-    /* --- CORES DAS BORDAS LATERAIS (Mantém fixas pois são identidade) --- */
-    .border-white  { border-left: 5px solid var(--text-color); } /* Borda "Total" tbm vira responsiva */
+    /* Bordas Laterais KPIs */
+    .border-white  { border-left: 5px solid var(--text-color); }
     .border-red    { border-left: 5px solid #e74c3c; }
     .border-green  { border-left: 5px solid #2ecc71; }
     .border-orange { border-left: 5px solid #f39c12; } 
+
+    /* --- NOVOS ESTILOS DO KANBAN (Trazidos da Page 1) --- */
+    .k-column-header {
+        font-size: 12px; font-weight: 800; text-transform: uppercase;
+        color: var(--text-color); opacity: 0.7;
+        border-bottom: 2px solid rgba(128, 128, 128, 0.3); 
+        padding-bottom: 8px; margin-bottom: 20px; letter-spacing: 1px;
+    }
     
-    /* Ajustes Gerais */
-    section[data-testid="stSidebar"] > div {height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding-top: 0px !important; padding-bottom: 20px !important;}
-    div[data-testid="stSidebarUserContent"] {padding-top: 2rem !important; display: flex; flex-direction: column; height: 100%;}
-    .footer-container { margin-top: auto; }
+    .kanban-card {
+        background-color: var(--secondary-background-color);
+        border: 1px solid rgba(128, 128, 128, 0.2);
+        border-radius: 10px; padding: 14px; margin-bottom: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        color: var(--text-color);
+        /* Animação */
+        animation: slideUpFade 0.4s ease-out forwards;
+        transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+    }
     
-    .chat-meta { font-size: 0.75rem; color: var(--text-color); opacity: 0.7; margin-bottom: 2px; }
-    .badge-total { background-color: rgba(0, 200, 83, 0.1); color: #00C853; padding: 4px 10px; border-radius: 6px; border: 1px solid #00C853; font-weight: bold; font-size: 13px; white-space: nowrap; }
-    .btn-ghost { display: inline-flex; align-items: center; background-color: transparent !important; border: 1px solid #FF4B4B !important; color: #FF4B4B !important; padding: 4px 12px; border-radius: 4px; text-decoration: none; font-size: 14px; font-weight: 500; transition: all 0.2s; }
+    .kanban-card:hover {
+        transform: translateY(-4px) scale(1.01); 
+        box-shadow: 0 8px 16px rgba(0,0,0,0.1);
+        border-color: #FF4B4B;
+        z-index: 1;
+    }
+
+    .k-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid rgba(128, 128, 128, 0.1); }
+    .k-id { font-weight: 800; font-size: 14px; color: var(--text-color); }
+    .k-fiscal-badge { font-size: 10px; padding: 3px 8px; border-radius: 12px; font-weight: 700; text-transform: uppercase; }
+    .k-body { font-size: 13px; opacity: 0.9; margin-bottom: 8px; }
+    .k-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .k-icon { opacity: 0.7; width: 16px; text-align: center; }
+
+    /* Rota Box */
+    .k-rota-box {
+        background-color: rgba(128, 128, 128, 0.1);
+        border-radius: 6px; padding: 8px; margin-top: 10px;
+        font-size: 11px; border: 1px solid rgba(128, 128, 128, 0.1);
+    }
+    .k-rota-title { font-weight: 700; color: #29B5E8; margin-bottom: 4px; }
+    .k-rota-flow { display: flex; align-items: center; gap: 6px; color: var(--text-color); opacity: 0.8; }
+    .k-time { font-size: 11px; color: var(--text-color); opacity: 0.5; margin-top: 10px; text-align: right; font-style: italic; }
+    
+    /* Outros */
+    .chat-meta { font-size: 0.75rem; opacity: 0.7; margin-bottom: 2px; }
+    .badge-total { background-color: rgba(0, 200, 83, 0.1); color: #00C853; padding: 4px 10px; border-radius: 6px; border: 1px solid #00C853; font-weight: bold; font-size: 13px; }
+    .btn-ghost { display: inline-flex; align-items: center; background-color: transparent !important; border: 1px solid #FF4B4B !important; color: #FF4B4B !important; padding: 4px 12px; border-radius: 4px; text-decoration: none; font-size: 14px; font-weight: 500; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -665,18 +681,18 @@ elif tipo_visualizacao == "Kanban":
     st.write("") # Espaçamento superior
     
     fluxo = ["ABERTO", "EM ANÁLISE", "EM TRÂNSITO", "CONCLUÍDO"]
-    # Cores vibrantes para os headers (Estilo Page 1)
+    # Cores vibrantes para os headers
     cores_coluna = {"ABERTO": "#FF4B4B", "EM ANÁLISE": "#FFA726", "EM TRÂNSITO": "#29B5E8", "CONCLUÍDO": "#00C853"}
     
     cols = st.columns(4)
     
     for i, status in enumerate(fluxo):
         with cols[i]:
-            # --- HEADER DA COLUNA (Estilo Page 1) ---
+            # --- HEADER DA COLUNA ---
             cor = cores_coluna[status]
             st.markdown(f"<div class='k-column-header' style='border-color: {cor}; color: {cor};'>{status}</div>", unsafe_allow_html=True)
             
-            # Filtra itens do status atual
+            # Filtra itens usando df_view (os dados filtrados da Page 3)
             itens = df_view[df_view['STATUS'] == status]
             
             if itens.empty: 
@@ -686,52 +702,42 @@ elif tipo_visualizacao == "Kanban":
             for _, row in itens.iterrows():
                 id_proc = row['ID_PROCESSO']
                 
-                # 1. Preparação de Dados (Mantendo lógica original da Page 3)
+                # 1. Preparação de Dados
                 st_fiscal = row.get('STATUS_FISCAL', 'PENDENTE')
                 
-                # Cores Fiscal (Mapeamento visual Page 1)
-                if "APROVADO" in st_fiscal:
-                    bg_fisc, fg_fisc = "#e8f5e9", "#2e7d32"
-                elif "REJEITADO" in st_fiscal:
-                    bg_fisc, fg_fisc = "#ffebee", "#c62828"
-                elif "AGUARDANDO" in st_fiscal:
-                    bg_fisc, fg_fisc = "#fff3e0", "#ef6c00"
-                else:
-                    bg_fisc, fg_fisc = "#f5f5f5", "#616161"
+                # Cores Fiscal (Lógica do CSS novo)
+                bg_fisc, fg_fisc = "#f5f5f5", "#616161" # Default
+                if "APROVADO" in st_fiscal: bg_fisc, fg_fisc = "#e8f5e9", "#2e7d32"
+                elif "REJEITADO" in st_fiscal: bg_fisc, fg_fisc = "#ffebee", "#c62828"
+                elif "AGUARDANDO" in st_fiscal or "PENDENTE" in st_fiscal: bg_fisc, fg_fisc = "#fff3e0", "#ef6c00"
 
-                # Dados de Texto
                 nf_val = row.get('NF', '-')
                 resp_val = str(row.get('RESPONSAVEL', 'System')).split(' ')[0].title()
                 
                 veic = str(row.get('VEICULO', '') or '?')
                 mot = str(row.get('MOTORISTA', '') or '?').split(' ')[0].title()
                 
-                # Tratamento de Locais
-                loc_origem = str(row.get('LOCAL', 'Origem'))
                 loc_atual = str(row.get('LOCAL_ATUAL', '...'))
                 loc_dest = str(row.get('LOCAL_DESTINO', 'Destino'))
                 
-                # Monta string transporte
-                info_transporte = f"{veic} • {mot}" if (veic != '?' and mot != '?') else mot if mot != '?' else "Transporte n/d"
+                info_transporte = f"{veic} • {mot}" if (veic != '?' and mot != '?') else mot if mot != '?' else "Transp. N/D"
 
-                # 2. HTML da Rota (Híbrido: Visual Page 1 + Dados Page 3)
+                # 2. HTML da Rota (Sintaxe segura para evitar quebra)
                 div_rota = ""
-                # Se tivermos dados de local atual, mostramos o box cinza
-                if loc_atual not in ['...', ''] or loc_dest != '?':
+                # Só exibe se tiver informação relevante
+                if loc_atual not in ['...', '', 'None'] or loc_dest not in ['Destino', '', 'None']:
                     div_rota = (
                         f'<div class="k-rota-box">'
                         f'  <div class="k-rota-title">🚛 {info_transporte}</div>'
                         f'  <div class="k-rota-flow">'
-                        # Aqui mantivemos a lógica visual simples (Atual -> Destino) para não quebrar o layout,
-                        # mas você pode adicionar a Origem se quiser. O visual Clean da Page 1 prefere 2 pontos.
-                        f'      <span title="Origem: {loc_origem}">{loc_atual}</span>' 
+                        f'      <span>{loc_atual}</span>' 
                         f'      <span style="color:#FF4B4B; font-weight:bold;">➝</span>' 
                         f'      <span>{loc_dest}</span>'
                         f'  </div>'
                         f'</div>'
                     )
 
-                # 3. HTML DO CARD COMPLETO (Sintaxe Segura)
+                # 3. HTML DO CARD (Estrutura Page 1)
                 html_card = (
                     f'<div class="kanban-card">'
                     f'  <div class="k-card-header">'
@@ -743,16 +749,14 @@ elif tipo_visualizacao == "Kanban":
                     f'      <div class="k-row"><span class="k-icon">👤</span><span>{resp_val}</span></div>'
                     f'      {div_rota}'
                     f'  </div>'
-                    # Adicionei a data de criação no rodapé se existir, pra dar o toque final
                     f'  <div class="k-time" style="margin-top:5px;">📅 {row.get("DATA_CRIACAO", "")}</div>'
                     f'</div>'
                 )
                 
-                # Renderiza o Card
+                # Renderiza Card
                 st.markdown(html_card, unsafe_allow_html=True)
                 
-                # 4. BOTÕES DE AÇÃO (Layout 1-4-1 igual Page 1)
-                # O container border=True foi removido em favor do layout limpo
+                # 4. BOTÕES (Lógica Page 3 mantida: Detalhes abre Modal)
                 b1, b2, b3 = st.columns([1, 4, 1])
                 
                 # Botão Voltar
@@ -761,7 +765,7 @@ elif tipo_visualizacao == "Kanban":
                         atualizar_status_devolucao(id_proc, fluxo[i-1])
                         st.rerun()
                 
-                # Botão Detalhes (Expandido)
+                # Botão Detalhes (Abre o Modal específico da Page 3)
                 if b2.button("Detalhes", key=f"p3_det_{id_proc}", use_container_width=True):
                     modal_detalhes_completo(id_proc, row, st.session_state.get('usuario', 'Anon'))
                 
