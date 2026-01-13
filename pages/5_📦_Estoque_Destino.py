@@ -295,8 +295,7 @@ with c_kpi3:
     st.markdown(card_html("Processos / NFs", f"{nfs_envolvidas}", "border-blue"), unsafe_allow_html=True)
 
 with c_kpi4:
-    msg_dest = f"⚠️ {sem_destino} pendentes" if sem_destino > 0 else "Tudo Alocado"
-    st.markdown(card_html("Sem Destino", f"{sem_destino}", "border-red", f"<div style='font-size:11px; margin-top:5px; color:#e74c3c'>{msg_dest}</div>" if sem_destino > 0 else ""), unsafe_allow_html=True)
+    st.markdown(card_html("Sem Destino", f"{sem_destino}", "border-red", f"<div style='font-size:11px; margin-top:5px</div>" if sem_destino > 0 else ""), unsafe_allow_html=True)
 
 # ==============================================================================
 # 8. VISUALIZAÇÃO (TABELA EM CIMA, GRÁFICO EM BAIXO)
