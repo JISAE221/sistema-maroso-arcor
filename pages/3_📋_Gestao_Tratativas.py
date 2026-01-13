@@ -179,8 +179,16 @@ from services.conexao_sheets import (
     atualizar_status_devolucao,
     atualizar_tratativa_completa
 )
-from services.upload_service import upload_bytes_cloudinary 
+from services.upload_service import upload_bytes_cloudinary
 
+def card_html(label, value, border_class, sub_html=""):
+    return f"""
+    <div class="kpi-card {border_class}">
+        <div class="kpi-label">{label}</div>
+        <div class="kpi-value">{value}</div>
+        {sub_html}
+    </div>
+    """
 st.title("Gestão de Tratativas")
 
 def calcular_prazo_alerta(data_inicio_str, status_atual, data_fim_str=None):
@@ -310,7 +318,7 @@ if not df_proc.empty:
     
     # Verifica STATUS_FISCAL
     if "STATUS_FISCAL" in df_proc.columns: 
-        df_proc["STATUS_FISCAL"] = "PENDENTE"
+        # Preenche vazios, converte para texto, joga para MAIÚSCULO e remove espaços
         df_proc['STATUS_FISCAL'] = df_proc['STATUS_FISCAL'].fillna("PENDENTE").astype(str).str.upper().str.strip()
     else:
         df_proc['STATUS_FISCAL'] = "PENDENTE"
@@ -388,47 +396,30 @@ if not df_filtered.empty:
     </style>
     """, unsafe_allow_html=True)
 
-    # Cálculo dos Números
+    # CÁLCULOS
     total = len(df_filtered)
     abertos = len(df_filtered[df_filtered['STATUS'] == 'ABERTO'])
     concluidos = len(df_filtered[df_filtered['STATUS'] == 'CONCLUÍDO'])
-    pend_fisc = len(df_filtered[df_filtered['STATUS_FISCAL'].astype(str).str.contains('AGUARDANDO', na=False)])
+    
+    # CONTAGEM FISCAL CORRIGIDA (Agora busca na lista de palavras-chave)
+    pend_fisc = len(df_filtered[df_filtered['STATUS_FISCAL'].isin(['PENDENTE', 'AGUARDANDO', 'EM ANÁLISE'])])
 
+    # RENDERIZAÇÃO
     c1, c2, c3, c4 = st.columns(4)
 
-    # 1. TOTAL (Cinza Neutro)
-    c1.markdown(f"""
-    <div class="kpi-card" style="border-left-color: #6c757d;">
-        <div class="kpi-label">Total de Processos</div>
-        <div class="kpi-val">{total}</div>
-    </div>
-    """, unsafe_allow_html=True)
+    with c1:
+        st.markdown(card_html("Total de Processos", f"{total}", "border-white"), unsafe_allow_html=True)
 
-    # 2. EM ABERTO (Vermelho)
-    c2.markdown(f"""
-    <div class="kpi-card" style="border-left-color: #FF4B4B;">
-        <div class="kpi-label">Em Aberto</div>
-        <div class="kpi-val">{abertos}</div>
-    </div>
-    """, unsafe_allow_html=True)
+    with c2:
+        sub = f"<div class='kpi-sub'>🔥 {abertos} precisam de atenção</div>" if abertos > 0 else ""
+        st.markdown(card_html("Em Aberto", f"{abertos}", "border-red", sub), unsafe_allow_html=True)
 
-    # 3. CONCLUÍDOS (Verde)
-    c3.markdown(f"""
-    <div class="kpi-card" style="border-left-color: #00C853;">
-        <div class="kpi-label">Concluídos</div>
-        <div class="kpi-val">{concluidos}</div>
-    </div>
-    """, unsafe_allow_html=True)
+    with c3:
+        st.markdown(card_html("Concluídos", f"{concluidos}", "border-green"), unsafe_allow_html=True)
 
-    # 4. PENDÊNCIA FISCAL (Laranja)
-    c4.markdown(f"""
-    <div class="kpi-card" style="border-left-color: #FFA726;">
-        <div class="kpi-label">Pend. Fiscal</div>
-        <div class="kpi-val">{pend_fisc}</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.write("")
+    with c4:
+        sub_fisc = f"<div class='kpi-sub'>⚠️ {pend_fisc} notas travadas</div>" if pend_fisc > 0 else "<div style='color:#2ecc71; font-size:12px; margin-top:5px;'>Tudo Ok!</div>"
+        st.markdown(card_html("Pend. Fiscal", f"{pend_fisc}", "border-orange", sub_fisc), unsafe_allow_html=True)
 
 # --- BUSCA ---
 if not df_filtered.empty:
