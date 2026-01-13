@@ -564,7 +564,7 @@ if tipo_visualizacao == "Lista":
                 """, unsafe_allow_html=True)
             
             st.markdown(f"**Fiscal:** {badge_fisc} &nbsp; | &nbsp; **Ordem de Carga:** {row.get('ORDEM_DE_CARGA','-')} &nbsp; | &nbsp; **Origem:** {row.get('LOCAL','-')} &nbsp; | &nbsp; **Data:** {row.get('DATA_CRIACAO', '-')}")
-            st.caption(f"Responsável: {row.get('RESPONSAVEL','-')} | OC: {row.get('OC','-')} | TIPO VEÍCULO: {row.get('TIPO_VEICULO','-')}| TIPO CARGA: {row.get('TIPO_CARGA','-')}")
+            st.caption(f"Responsável: {row.get('RESPONSAVEL','-')} | OC: {row.get('OC','-')} | TIPO VEÍCULO: {row.get('TIPO_VEICULO','-')} | TIPO CARGA: {row.get('TIPO_CARGA','-')}")
             st.divider()
 
             # TABELA NO EXPANDER
@@ -641,7 +641,7 @@ if tipo_visualizacao == "Lista":
                     st.markdown("---")
                     c_cob1, c_cob2 = st.columns([1, 1.5])
                     with c_cob1:
-                        
+
                         val_cob_atual = str(row.get('COD_COB', ''))
                         if val_cob_atual.lower() in ["nan", "none", "nat"]:
                             val_cob_atual = ""
