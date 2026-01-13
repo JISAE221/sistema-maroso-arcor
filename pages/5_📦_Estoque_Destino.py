@@ -11,7 +11,7 @@ if "logado" not in st.session_state or not st.session_state["logado"]:
     st.switch_page("app.py")
 
 # ==============================================================================
-# 1. CONFIGURAÇÃO DA PÁGINA & CSS (ESTILO PAGE 3)
+# 1. CONFIGURAÇÃO DA PÁGINA & CSS
 # ==============================================================================
 st.set_page_config(page_title="Controle de Estoque", page_icon="📦", layout="wide")
 
@@ -26,9 +26,9 @@ st.markdown("""
         border-radius: 4px;
         padding: 15px 20px;
         margin-bottom: 20px;
-        /* Sombra suave que funciona nos dois temas */
+        /* Sombra suave */
         box-shadow: 0 2px 4px rgba(0,0,0,0.1); 
-        /* Borda cinza translúcida (funciona no dark e light) */
+        /* Borda cinza translúcida */
         border: 1px solid rgba(128,128,128,0.2);
     }
     
@@ -37,7 +37,6 @@ st.markdown("""
         font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 1px;
-        /* Texto responsivo com opacidade */
         color: var(--text-color);
         opacity: 0.6;
         margin-bottom: 5px;
@@ -46,7 +45,6 @@ st.markdown("""
     .kpi-value {
         font-size: 28px;
         font-weight: 700;
-        /* COR MÁGICA: Muda sozinho (Preto no Light / Branco no Dark) */
         color: var(--text-color);
         line-height: 1.2;
     }
@@ -58,13 +56,10 @@ st.markdown("""
     }
     
     /* --- BORDAS COLORIDAS --- */
-    /* Branco no Dark / Preto no Light */
     .border-white  { border-left: 5px solid var(--text-color); } 
-    
-    /* Cores Fixas (Funcionam bem nos dois fundos) */
     .border-red    { border-left: 5px solid #e74c3c; }
     .border-green  { border-left: 5px solid #2ecc71; }
-    .border-blue   { border-left: 5px solid #3498db; } /* Page 5 usa Azul */
+    .border-blue   { border-left: 5px solid #3498db; }
     
     /* Ajustes Gerais */
     section[data-testid="stSidebar"] > div {height: 100vh; display: flex; flex-direction: column; justify-content: space-between; padding-top: 0px !important; padding-bottom: 20px !important;}
@@ -174,7 +169,6 @@ def modal_rastro(item):
 # ==============================================================================
 # 4. INTERFACE PRINCIPAL
 # ==============================================================================
-# Título Clean
 st.title("Controle de Estoque por Destino")
 
 try:
@@ -203,7 +197,6 @@ if isinstance(datas_sel, tuple) and len(datas_sel) == 2:
         df_date_filt = df_date_filt[(df_date_filt["DT_OBJ"].dt.date >= start) & (df_date_filt["DT_OBJ"].dt.date <= end)]
 
 # --- 2. CARDS DE KPI (LAYOUT IGUAL PAGE 3) ---
-# Calculamos os KPIs com base no filtro de DATA (pra dar visão macro do período)
 qtd_total = df_date_filt["QTD_FLOAT"].sum()
 valor_total = df_date_filt["VALOR_TOTAL_FLOAT"].sum()
 nfs_envolvidas = df_date_filt["NF"].nunique()
@@ -231,11 +224,10 @@ with c_kpi3:
     st.markdown(card_html("Processos / NFs", f"{nfs_envolvidas}", "border-blue"), unsafe_allow_html=True)
 
 with c_kpi4:
-    # Se tiver sem destino, mostra em vermelho
     st.markdown(card_html("Pend. de Destino", f"{sem_destino}", "border-red"), unsafe_allow_html=True)
 
 
-# --- 3. BARRA DE FILTROS CLEAN (ABAIXO DOS KPIS) ---
+# --- 3. BARRA DE FILTROS CLEAN ---
 st.write("")
 c_filt1, c_filt2 = st.columns([1, 2])
 
@@ -263,53 +255,56 @@ if search_term:
     )
     df_final = df_final[mask]
 
-# --- 4. GRÁFICOS E TABELA ---
+# ==============================================================================
+# 4. TABELA E GRÁFICO (ORDEM INVERTIDA)
+# ==============================================================================
 st.divider()
 
 if df_final.empty:
     st.info("🔎 Nenhum registro encontrado com esses filtros.")
 else:
-    c_graf, c_tab = st.columns([1, 1.5])
+    # --- 1. TABELA (AGORA NO TOPO) ---
+    st.subheader(f"📋 Lista Detalhada ({len(df_final)})")
+    st.caption("👆 Clique na linha para ver o rastro")
     
-    with c_graf:
-        st.subheader("🔥 Top Valor em Estoque")
-        df_tier = df_final.groupby(["DESCRICAO", "LOCAL_DESTINO"])["VALOR_TOTAL_FLOAT"].sum().reset_index().sort_values("VALOR_TOTAL_FLOAT", ascending=False).head(10)
-        
-        fig = px.bar(
-            df_tier, 
-            x="VALOR_TOTAL_FLOAT", 
-            y="DESCRICAO", 
-            orientation='h', 
-            text_auto='.2s', 
-            color="LOCAL_DESTINO", 
-            title=""
-        )
-        fig.update_layout(
-            margin=dict(l=0, r=0, t=20, b=0),
-            yaxis={'categoryorder':'total ascending'}, 
-            legend=dict(orientation="h", y=1.1)
-        )
-        st.plotly_chart(fig, use_container_width=True)
+    cols_view = ["ID_PROCESSO", "OC", "NF", "DESCRICAO", "QTD", "VALOR_TOTAL", "LOCAL_DESTINO"]
+    cols_final = [c for c in cols_view if c in df_final.columns]
+    
+    df_display = df_final.reset_index(drop=True)
+    
+    event = st.dataframe(
+        df_display[cols_final],
+        use_container_width=True,
+        hide_index=True,
+        height=400,
+        on_select="rerun",
+        selection_mode="single-row"
+    )
+    
+    if event.selection.rows:
+        idx = event.selection.rows[0]
+        item_selecionado = df_display.iloc[idx]
+        modal_rastro(item_selecionado)
 
-    with c_tab:
-        st.subheader(f"📋 Lista Detalhada ({len(df_final)})")
-        st.caption("👆 Clique na linha para ver o rastro")
-        
-        cols_view = ["ID_PROCESSO", "OC", "NF", "DESCRICAO", "QTD", "VALOR_TOTAL", "LOCAL_DESTINO"]
-        cols_final = [c for c in cols_view if c in df_final.columns]
-        
-        df_display = df_final.reset_index(drop=True)
-        
-        event = st.dataframe(
-            df_display[cols_final],
-            use_container_width=True,
-            hide_index=True,
-            height=400,
-            on_select="rerun",
-            selection_mode="single-row"
-        )
-        
-        if event.selection.rows:
-            idx = event.selection.rows[0]
-            item_selecionado = df_display.iloc[idx]
-            modal_rastro(item_selecionado)
+    st.write("") # Espaço entre tabela e gráfico
+    st.divider()
+
+    # --- 2. GRÁFICO (AGORA EMBAIXO) ---
+    st.subheader("🔥 Top Valor em Estoque")
+    df_tier = df_final.groupby(["DESCRICAO", "LOCAL_DESTINO"])["VALOR_TOTAL_FLOAT"].sum().reset_index().sort_values("VALOR_TOTAL_FLOAT", ascending=False).head(10)
+    
+    fig = px.bar(
+        df_tier, 
+        x="VALOR_TOTAL_FLOAT", 
+        y="DESCRICAO", 
+        orientation='h', 
+        text_auto='.2s', 
+        color="LOCAL_DESTINO", 
+        title=""
+    )
+    fig.update_layout(
+        margin=dict(l=0, r=0, t=20, b=0),
+        yaxis={'categoryorder':'total ascending'}, 
+        legend=dict(orientation="h", y=1.1)
+    )
+    st.plotly_chart(fig, use_container_width=True)
