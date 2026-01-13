@@ -463,7 +463,6 @@ if dados:
                         "TIPO_CARGA": v_tipo_carga,
                         "LOCAL": v_local, # Mapeia Local Atual
                         "LOCAL_DESTINO": v_destino, # Mapeia Local Destino
-                        "MOTIVO": dados.get("MOTIVO_COMPLETO"),
                         "RESPONSAVEL": st.session_state.get("usuario", "anonimo"),
                         "LINK_NFD": link_nfd_doc 
                     }
