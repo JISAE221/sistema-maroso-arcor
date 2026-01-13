@@ -643,7 +643,7 @@ if tipo_visualizacao == "Lista":
                     with c_cob1:
                         val_cob_atual = str(row.get('COD_COB', ''))
                         if val_cob_atual == "None": val_cob_atual = ""
-                        n_cod_cob = c_cob1.text_input("Cód. Ocorrência", value=val_cob_atual)
+                        n_cod_cob = int(c_cob1.text_input("Cód. Ocorrência", value=val_cob_atual))
                         data_str_cob = str(row.get("COB_DATA",""))
                         val_data_cob = None
                         if data_str_cob and data_str_cob not in ["None", "", "NaT"]:
